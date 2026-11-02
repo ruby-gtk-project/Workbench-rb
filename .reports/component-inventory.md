@@ -24,23 +24,52 @@ object lives under `lib/workbench/`.
 
 | | upstream | `ruby` |
 |---|---:|---:|
-| widget occurrences | 2569 | 4 |
-| distinct widget types | 117 | 4 |
-| distinct CSS classes | 172 | 0 |
-| distinct signals | 177 | 1 |
-| distinct action names | 133 | 0 |
+| widget occurrences | 2569 | 143 |
+| distinct widget types | 117 | 49 |
+| distinct CSS classes | 172 | 14 |
+| distinct signals | 177 | 30 |
+| distinct action names | 133 | 22 |
 
 That is a measure of how much app is left, not an inventory — act on the
 per-component sections below.
 
 ## Status
 
-`lib/` on `ruby` holds three files: `lib/workbench.rb` (a single
-`require_relative`), `lib/workbench/rb/version.rb`, and
-`lib/workbench/application.rb` — the scaffold `Adw.StatusPage` reading "The
-Ruby port has not been written yet." **No user-facing component of Workbench
-has been ported.** Every row below is `missing`, except the application
-object, which exists as a placeholder with none of upstream's behaviour.
+Re-checked against `lib/` at `f3be425`. The first porting pass
+(`d878d16`, "Port the window, panels, previewer, documents and app actions")
+landed twenty-five files and roughly 4,700 lines, so the scaffold line this
+section used to carry is gone: the app now opens a real window with four
+panels, an editor, a console, a previewer and the app menu.
+
+**Ported (24 files + the application object):** `lib/workbench/application.rb`,
+`actions.rb`, `about_dialog.rb`, `shortcuts_window.rb`, `window.rb`,
+`app_menu.rb`, `theme_selector.rb`, `panel_code.rb`, `panel_style.rb`,
+`panel_ui.rb`, `panel_preview.rb`, `previewer.rb`, `internal_previewer.rb`,
+`devtools.rb`, `term_console.rb`, `code_view.rb`, `code_find.rb`,
+`save_project_dialog.rb`, `blueprint_experimental_dialog.rb`, `settings.rb`,
+`session.rb`, `document.rb`, `language.rb`, `style.rb`, plus `xml.rb` and
+`xml_document.rb` for the UI panel's XML path.
+
+**Not ported at all — five user-facing units and their rows:** the Library
+window and its demo rows, the Extensions dialog and its rows, the Permissions
+dialog, the diagnostic hover provider, and the windowed preview window from
+`src/libworkbench`. Behind them: the out-of-process previewer (External +
+D-Bus + the two Vala programs), the LSP client, and seven of the eight
+language documents (only `xml_document.rb` exists, so there is no formatting,
+no compiling, no diagnostics and no language server for JavaScript,
+TypeScript, Vala, Rust, Python, Blueprint or CSS).
+
+**Ported with a known substitution**, because the dev shell has neither
+GtkSourceView nor Vte bindings: `code_view.rb` is a `Gtk::TextView` where
+upstream has a `GtkSource.View` (no syntax highlighting, no style schemes, no
+completion), `code_find.rb` searches the buffer itself instead of using
+`GtkSource.SearchContext`, `term_console.rb` is a read-only text view rather
+than a `Vte.Terminal` tailing a log, `shortcuts_window.rb` is an
+`Adw.ShortcutsDialog` rather than the deprecated `Gtk.ShortcutsWindow`, and
+`internal_previewer.rb` cannot install a custom `Gtk.BuilderScope`, so a
+`<signal>` in a previewed definition is not connected. Each of those is a
+parity gap recorded in the file's own header comment, not an omission to
+rediscover.
 
 ## Declarative roots — the unit list
 
@@ -77,7 +106,7 @@ theme's `resource_path`, narrows `search_path` to `/usr/share/icons` and
 `shutdown`, restores saved sessions, and on first run opens the `Welcome`
 demo maximized. `open` with hint `project` opens a project window.
 
-→ `lib/workbench/application.rb` — **exists as a placeholder only.**
+→ `lib/workbench/application.rb` — **ported.** Stylesheet, colour scheme, actions and session reopening are there; the icon registration, the `biome` LSP spawn, `HANDLES_OPEN`, and the first-run Welcome demo are not.
 
 ### `src/actions.js` — application actions and accelerators
 
@@ -97,7 +126,7 @@ No widgets; eight actions and the accelerators that reach them. Everything in
 | `app.library` | — | `<Control><Shift>O` | installed in `Library.js` |
 | `app.shortcuts` | — | `<Control>question` | installed in `shortcutsWindow.js` |
 
-→ `lib/actions.rb` — missing.
+→ `lib/actions.rb` — **ported.** All eight actions, with the portal calls replaced by `Gtk::FileLauncher`.
 
 ### `src/about.js` — About dialog
 
@@ -107,7 +136,7 @@ website, `issue_url`, five developers, three designers, three artists, a
 at runtime from `pkg.version`, `GLib.get_os_info`, the GJS / Adw / GTK / GLib
 versions, the Flatpak version out of `.flatpak-info` and `valac --version`.
 
-→ `lib/about_dialog.rb` — missing.
+→ `lib/about_dialog.rb` — **ported.**
 
 ### `src/shortcutsWindow.blp` + `src/shortcutsWindow.js` — keyboard shortcuts
 
@@ -124,7 +153,7 @@ re-presented as transient for the active window thereafter.
 Note `Gtk.ShortcutsWindow` is deprecated in GTK 4.18; the port should decide
 between it and `Adw.ShortcutsDialog` (the pilot port used the latter).
 
-→ `lib/shortcuts_window.rb` — missing.
+→ `lib/shortcuts_window.rb` — **ported**, as an `Adw.ShortcutsDialog`: `Gtk::ShortcutsWindow` cannot be constructed from Ruby. Same three groups, same twenty-one accelerators.
 
 ### `src/window.blp` + `src/window.js` — the main window
 
@@ -159,7 +188,7 @@ Permissions dialog when Rust needs the network), and
 `gtk-application-prefer-dark-theme` mirroring into
 `~/.config/gtk-4.0/settings.ini` for the Platform Tools.
 
-→ `lib/window.rb` — missing.
+→ `lib/window.rb` — **ported** (473 lines): the toolbar view, the four togglers, the placeholder, the paned, the window-scope actions and the run pipeline. The per-language branches that divert to Extensions and Permissions have nowhere to go yet, and the `gtk-4.0/settings.ini` mirroring for Platform Tools is absent.
 
 ### `src/window.blp` `menu menu_app` — the main menu
 
@@ -171,7 +200,7 @@ and a *Get Help* section of two (Discourse, Matrix); a **Platform Tools**
 submenu of three; Extensions; Permissions; Reveal in Files; Keyboard
 Shortcuts; About Workbench.
 
-→ `lib/app_menu.rb` — missing.
+→ `lib/app_menu.rb` — **ported**, including the `themeswitcher` slot, the Bookmarks submenu and the Platform Tools submenu.
 
 ### `src/window.blp` `menu preview_menu` — preview options
 
@@ -179,7 +208,7 @@ Two check items, `win.auto-preview` (Auto-Update) and `win.safe-mode` (Safe
 Mode), hung off a flat `Gtk.MenuButton` labelled "Preview" in the preview
 panel header.
 
-→ folded into `lib/panel_preview.rb` — missing.
+→ folded into `lib/panel_preview.rb` — **ported.**
 
 ### `src/window.blp` `menu menu_console` — console context menu
 
@@ -188,7 +217,7 @@ Three items: Copy (`win.console_copy`), Select All
 `Gtk.PopoverMenu` with `has-arrow: false`, pointed at the click position by a
 `Gtk.GestureClick` on button 3.
 
-→ folded into `lib/term_console.rb` — missing.
+→ folded into `lib/term_console.rb` — **ported**, against a text view rather than a terminal.
 
 ### `src/PanelCode.js` + `src/window.blp` `panel_code` — the Code panel
 
@@ -206,7 +235,7 @@ Switching language also mirrors the choice into the global
 per-language project files (`setupJavascriptProject`, `setupRustProject`,
 `setupTypeScriptProject`).
 
-→ `lib/panel_code.rb` — missing.
+→ `lib/panel_code.rb` — **ported.** The dropdown, the stack and the language switch are there; the per-language project scaffolding is not.
 
 ### `src/PanelStyle.js` + `src/window.blp` `panel_style` — the Style panel
 
@@ -215,7 +244,7 @@ with a `dim-label` `<b>Style CSS</b>`, a `Gtk.Separator`, and one `$CodeView`
 with `language_id: 'css'`. `PanelStyle.js` is only the two-way binding
 between `show-style`, the toggler's `active` and the panel's `visible`.
 
-→ `lib/panel_style.rb` — missing.
+→ `lib/panel_style.rb` — **ported.**
 
 ### `src/PanelUI.js` + `src/window.blp` `panel_ui` — the UI panel
 
@@ -233,7 +262,7 @@ XML, which the previewer listens to. Conversion routes through the Blueprint
 LSP and forces the console open; a blueprint LSP error is logged through
 `logBlueprintError`.
 
-→ `lib/panel_ui.rb` — missing.
+→ `lib/panel_ui.rb` — **ported** for the XML side. Blueprint conversion needs the Blueprint LSP, which is not ported, so only the `xml` page is live.
 
 ### `src/Previewer/Previewer.js` + `src/window.blp` `panel_preview` — the Preview panel
 
@@ -259,7 +288,7 @@ the data dir, copies a `Gdk.Texture` to the clipboard, and sends a
 `Gio.Notification` titled "Workbench Screenshot captured" with a "Show in
 Files" button wired to `app.show-screenshot`.
 
-→ `lib/panel_preview.rb` (chrome) and `lib/previewer.rb` (the pipeline) — missing.
+→ `lib/panel_preview.rb` (chrome) and `lib/previewer.rb` (the pipeline) — **both ported.** Missing from the pipeline: safe-mode's crash subprocess, the screenshot path (PNG, clipboard texture, notification) and CSS-parser-error diagnostics fed back into the CSS view.
 
 ### `src/Previewer/Internal.js` — in-process previewer
 
@@ -268,7 +297,7 @@ exposes the `globalThis.workbench` API (`window`, `application`, `builder`,
 `template`, `resolve`, `preview`, `build`), applies scoped CSS by rewriting
 selectors through `postcss`, and opens the GTK Inspector.
 
-→ `lib/internal_previewer.rb` — missing.
+→ `lib/internal_previewer.rb` — **ported**, without the logging `Gtk.BuilderScope` and without the GTK Inspector hook.
 
 ### `src/Previewer/External.js`, `src/Previewer/DBusPreviewer.js`, `src/Previewer/previewer.vala`, `src/Previewer/crasher.vala`
 
@@ -278,9 +307,10 @@ signals, interface in `src/Previewer/previewer.xml`), the Vala previewer
 process that serves it, and `crasher.vala`, the subprocess safe-mode uses to
 find out whether a UI definition crashes before it is previewed.
 
-→ `lib/external_previewer.rb`, `lib/dbus_previewer.rb` — missing. The Vala
-processes have no Ruby counterpart and need a decision (reimplement the
-previewer process in Ruby, or drop out-of-process preview).
+→ `lib/external_previewer.rb`, `lib/dbus_previewer.rb` — **missing.**
+`lib/previewer.rb` has only `use_internal`, so preview works for UI and CSS
+but not for code written in Vala, Rust or Python. The Vala processes still
+have no Ruby counterpart and still need a decision.
 
 ### `src/libworkbench/workbench-preview-window.blp` + `.c` — the preview window
 
@@ -289,7 +319,7 @@ previewer process in Ruby, or drop out-of-process preview).
 `get_content`/`set_content` proxy the toolbar view. This is the window a
 windowed preview appears in.
 
-→ `lib/preview_window.rb` — missing.
+→ `lib/preview_window.rb` — **missing.** `internal_previewer.rb` presents a root object as a plain window instead, so there is no 600×800 "Preview" window with a header bar.
 
 ### `src/Devtools.js` + `src/window.blp` `panel_devtools` — the console pane chrome
 
@@ -306,7 +336,7 @@ Owns the collapse arithmetic: dragging the paned below a 50px threshold writes
 button restores the remembered position. Installs `win.console`
 (`<Control><Shift>K`).
 
-→ `lib/devtools.rb` — missing.
+→ `lib/devtools.rb` — **ported**, including the collapse arithmetic. The Inspector button has no previewer hook to call.
 
 ### `src/TermConsole.js` + `src/window.blp` `devtools` — the console
 
@@ -321,7 +351,7 @@ context menu. Installs `win.clear` (`<Control>K`), `win.console_copy`
 `selection_changed` and `contents_changed`) and `win.console_select_all`
 (`<Control><Shift>A`).
 
-→ `lib/term_console.rb` — missing.
+→ `lib/term_console.rb` — **ported** as a text view: no Vte, so no `tail --follow`, no scrollback, no sixteen-colour palette.
 
 ### `src/widgets/CodeView.blp` + `src/widgets/CodeView.js` — the editor
 
@@ -344,7 +374,7 @@ strikethrough label and a "Deprecated" AFTER column, and triggered on `.`;
 saves and restores cursor line/offset and both scroll positions across text
 replacement.
 
-→ `lib/code_view.rb` — missing.
+→ `lib/code_view.rb` — **ported** as a `Gtk::TextView`: the coalesced `changed`, the cursor/scroll save-restore and the two diagnostic tags are there; syntax highlighting, the Adwaita style schemes, completion and hover are not, and there is no `GtkSource` to hang them on.
 
 ### `src/widgets/CodeFind.blp` + `src/widgets/CodeFind.js` — find bar
 
@@ -366,7 +396,7 @@ Backed by `GtkSource.SearchSettings` (case-insensitive, wrap-around) and a
 highlighting `GtkSource.SearchContext`; the counter follows
 `notify::occurrences-count` and the buffer's `mark-set`.
 
-→ `lib/code_find.rb` — missing.
+→ `lib/code_find.rb` — **ported**, searching the buffer directly instead of through `GtkSource.SearchContext`, and using a `Gtk::Entry` because `css-name` is construct-only.
 
 ### `src/WorkbenchHoverProvider.js` — diagnostic hover
 
@@ -374,7 +404,7 @@ A `GtkSource.HoverProvider` that, for diagnostics covering the hovered
 position, appends a vertical `Gtk.Box` with CSS `hoverdisplay osd frame` and
 one `body` `Gtk.Label` per message.
 
-→ `lib/hover_provider.rb` — missing.
+→ `lib/hover_provider.rb` — **missing**, and blocked: `GtkSource.HoverProvider` has no Ruby binding in this stack.
 
 ### `src/Library/Library.blp` + `src/Library/Library.js` — the Library window
 
@@ -403,7 +433,7 @@ force the code panel and language, auto-runs JavaScript demos whose manifest
 says `autorun`, and diverts to the Permissions dialog when the demo's
 `flatpak-finish-args` need permissions the sandbox lacks.
 
-→ `lib/library_window.rb` — missing.
+→ `lib/library_window.rb` — **missing.** `app.library` is declared in the header bar's button but installed nowhere, so the Library button is dead. The largest unported unit.
 
 ### `src/Library/EntryRow.blp` + `src/Library/EntryRow.js` — one demo row
 
@@ -419,7 +449,7 @@ accessibility.
 | `Gtk.Button` | n | `pill`, `small` | `clicked` → `triggered(language)` | one per language the demo supports, TypeScript suppressed when disabled |
 | `Gtk.Image` | 1 | — | — | `go-next-symbolic` |
 
-→ `lib/entry_row.rb` — missing.
+→ `lib/entry_row.rb` — **missing.**
 
 ### `src/Extensions/Extensions.blp` + `src/Extensions/Extensions.js` — Extensions dialog
 
@@ -434,7 +464,7 @@ restart Workbench once the commands have completed"). Installs
 `win.extensions`, which the run pipeline activates when an unavailable
 language is run.
 
-→ `lib/extensions_dialog.rb` — missing.
+→ `lib/extensions_dialog.rb` — **missing**, and with it `win.extensions`, which the run pipeline is supposed to activate for an unavailable language.
 
 ### `src/Extensions/Extension.blp` + `src/Extensions/Extension.js` — one extension row
 
@@ -450,7 +480,7 @@ language is run.
 | `Gtk.Label` | 1 | `dim-label` | — | "Run the following command" |
 | `Gtk.Label label_command` | 1 | `command_snippet` | — | selectable, markup, bound to `command` |
 
-→ `lib/extension_row.rb` — missing.
+→ `lib/extension_row.rb` — **missing.**
 
 ### `src/Permissions/Permissions.blp` + `src/Permissions/Permissions.js` — Permissions dialog
 
@@ -465,7 +495,7 @@ Flatpak sandbox-permissions docs, and a `boxed-list` of four `property`
 custom symbolic icon. Installs `win.permissions`; the window and the Library
 both activate it. **This is an error state**, not a preference page.
 
-→ `lib/permissions_dialog.rb` — missing.
+→ `lib/permissions_dialog.rb` — **missing**, and with it `win.permissions`.
 
 ### `troll/src/widgets/ThemeSelector.js` — theme switcher
 
@@ -474,8 +504,9 @@ Three `Gtk.CheckButton`s (Follow system / Light / Dark) in the main menu's
 stylesheet. Lives in the `troll` submodule, so it produces no row in an
 upstream scan of `src/` and must not be mistaken for an extra in the port.
 
-→ `lib/theme_selector.rb` — missing. **Not readable:** the submodule is not
-checked out (see Blockers).
+→ `lib/theme_selector.rb` — **ported** (102 lines, three check buttons on
+`app.color-scheme`), written from the component's description rather than from
+the submodule, which is still not checked out (see Blockers).
 
 ### `src/style.css` — the app stylesheet
 
@@ -487,7 +518,7 @@ background, `#toolbar_devtools` background, a dev-banner suppression rule on
 each panel's revealer, and a `prefers-color-scheme: dark` block swapping the
 two backgrounds to `#262626`.
 
-→ `lib/style.rb` (a `Gtk::CssProvider` added to the display) — missing.
+→ `lib/style.rb` — **ported** as a `Gtk::CssProvider` on the display.
 
 ### `data/app.gschema.xml` — settings
 
@@ -501,7 +532,7 @@ Two schemas and one enum. App schema `re.sonny.Workbench`:
 widget above is bound to one of these keys, so the port needs them before the
 window.
 
-→ `lib/settings.rb` — missing.
+→ `lib/settings.rb` — **ported.** Both schemas' keys exist; check whether a compiled GSettings schema is installed or the port keeps its own store.
 
 ### `src/sessions.js`, `src/Document.js`, `src/langs/*`
 
@@ -512,7 +543,7 @@ directory, settings instance, demo copying, save-as-project, recent projects,
 diagnostics). The save/discard dialog, the window title, the dirty tracking
 and every diagnostic underline come from here.
 
-→ `lib/session.rb`, `lib/document.rb` and one file per language — missing.
+→ `lib/session.rb` — **ported.** `lib/document.rb` — **ported**, reading and writing the file directly rather than through `GtkSource.FileLoader`/`FileSaver`. `lib/language.rb` — **ported** (upstream's `src/common.js` language table). Per-language documents: only `lib/xml_document.rb` exists; the JavaScript, TypeScript, Vala, Rust, Python, Blueprint and CSS documents, their builders and compilers, are **missing**.
 
 ### `src/window.blp` `alert_dialog_save_project` (+ `button_location`) — unsaved-session prompt
 
@@ -527,7 +558,7 @@ row_project_location` ("Location" / "Select Location") whose
 `dim-label caption` note "The project will be created in a new subdirectory".
 `save` only enables once both a name and a location exist.
 
-→ `lib/save_project_dialog.rb` — missing.
+→ `lib/save_project_dialog.rb` — **ported.**
 
 ### `src/window.blp` `dialog_blueprint_experimental` — Blueprint warning
 
@@ -537,7 +568,7 @@ description "Future versions may have breaking syntax" and the
 `re.sonny.Workbench-beaker` icon, and one `suggested-action pill`
 "Documentation" button that opens the blueprint-compiler docs.
 
-→ `lib/blueprint_experimental_dialog.rb` — missing.
+→ `lib/blueprint_experimental_dialog.rb` — **ported.**
 
 ### Icons and packaging
 
@@ -551,47 +582,80 @@ only GResource manifest upstream is
 `src/libworkbench/re.sonny.Workbench.libworkbench.gresource.xml`, for the C
 preview window's template.
 
-→ no `lib/*.rb`; an `assets/` or `data/` decision for the port — missing.
+→ no `lib/*.rb`; an `assets/` or `data/` decision for the port — **still undecided.** The port ships no icons, so every custom symbolic (the placeholder, the terminal, the preview, the screenshot icons) falls back to a missing-image icon.
 
 ## Summary table
 
+`Present` is as of `f3be425`. `yes` means the file exists and carries the
+component; `partial` means it exists with a parity gap named in the section
+above; `no` means nothing has been written.
+
 | Upstream file(s) | Port file | Kind | Present |
 |---|---|---|:-:|
-| `src/application.js` | `lib/workbench/application.rb` | application | placeholder |
-| `src/actions.js` | `lib/actions.rb` | actions | no |
-| `src/about.js` | `lib/about_dialog.rb` | dialog | no |
-| `src/shortcutsWindow.blp` + `.js` | `lib/shortcuts_window.rb` | shortcuts window | no |
-| `src/window.blp` + `src/window.js` | `lib/window.rb` | window | no |
-| `src/window.blp` (`menu_app`) | `lib/app_menu.rb` | menu | no |
-| `src/window.blp` (`alert_dialog_save_project`, `button_location`) | `lib/save_project_dialog.rb` | dialog | no |
-| `src/window.blp` (`dialog_blueprint_experimental`) | `lib/blueprint_experimental_dialog.rb` | dialog | no |
-| `src/PanelCode.js` + `window.blp` | `lib/panel_code.rb` | panel | no |
-| `src/PanelStyle.js` + `window.blp` | `lib/panel_style.rb` | panel | no |
-| `src/PanelUI.js` + `window.blp` | `lib/panel_ui.rb` | panel | no |
-| `src/Previewer/Previewer.js` + `window.blp` (`preview_menu`) | `lib/panel_preview.rb`, `lib/previewer.rb` | panel + pipeline | no |
-| `src/Previewer/Internal.js` | `lib/internal_previewer.rb` | previewer | no |
+| `src/application.js` | `lib/workbench/application.rb` | application | partial |
+| `src/actions.js` | `lib/actions.rb` | actions | yes |
+| `src/about.js` | `lib/about_dialog.rb` | dialog | yes |
+| `src/shortcutsWindow.blp` + `.js` | `lib/shortcuts_window.rb` | shortcuts window | yes |
+| `src/window.blp` + `src/window.js` | `lib/window.rb` | window | partial |
+| `src/window.blp` (`menu_app`) | `lib/app_menu.rb` | menu | yes |
+| `src/window.blp` (`alert_dialog_save_project`, `button_location`) | `lib/save_project_dialog.rb` | dialog | yes |
+| `src/window.blp` (`dialog_blueprint_experimental`) | `lib/blueprint_experimental_dialog.rb` | dialog | yes |
+| `src/PanelCode.js` + `window.blp` | `lib/panel_code.rb` | panel | partial |
+| `src/PanelStyle.js` + `window.blp` | `lib/panel_style.rb` | panel | yes |
+| `src/PanelUI.js` + `window.blp` | `lib/panel_ui.rb` | panel | partial |
+| `src/Previewer/Previewer.js` + `window.blp` (`preview_menu`) | `lib/panel_preview.rb`, `lib/previewer.rb` | panel + pipeline | partial |
+| `src/Previewer/Internal.js` | `lib/internal_previewer.rb` | previewer | partial |
 | `src/Previewer/External.js` | `lib/external_previewer.rb` | previewer | no |
 | `src/Previewer/DBusPreviewer.js` (+ `previewer.xml`) | `lib/dbus_previewer.rb` | D-Bus proxy | no |
 | `src/Previewer/previewer.vala`, `crasher.vala` | — (decision needed) | helper processes | no |
 | `src/libworkbench/workbench-preview-window.blp` + `.c` | `lib/preview_window.rb` | window | no |
-| `src/Devtools.js` + `window.blp` | `lib/devtools.rb` | panel chrome | no |
-| `src/TermConsole.js` + `window.blp` (`menu_console`) | `lib/term_console.rb` | terminal + menu | no |
-| `src/widgets/CodeView.blp` + `.js` | `lib/code_view.rb` | widget | no |
-| `src/widgets/CodeFind.blp` + `.js` | `lib/code_find.rb` | widget | no |
+| `src/Devtools.js` + `window.blp` | `lib/devtools.rb` | panel chrome | partial |
+| `src/TermConsole.js` + `window.blp` (`menu_console`) | `lib/term_console.rb` | terminal + menu | partial |
+| `src/widgets/CodeView.blp` + `.js` | `lib/code_view.rb` | widget | partial |
+| `src/widgets/CodeFind.blp` + `.js` | `lib/code_find.rb` | widget | partial |
 | `src/WorkbenchHoverProvider.js` | `lib/hover_provider.rb` | hover provider | no |
 | `src/Library/Library.blp` + `.js` | `lib/library_window.rb` | window | no |
 | `src/Library/EntryRow.blp` + `.js` | `lib/entry_row.rb` | row | no |
 | `src/Extensions/Extensions.blp` + `.js` | `lib/extensions_dialog.rb` | dialog | no |
 | `src/Extensions/Extension.blp` + `.js` | `lib/extension_row.rb` | row | no |
 | `src/Permissions/Permissions.blp` + `.js` | `lib/permissions_dialog.rb` | dialog (error state) | no |
-| `troll/src/widgets/ThemeSelector.js` | `lib/theme_selector.rb` | widget | no |
-| `src/style.css` | `lib/style.rb` | stylesheet | no |
-| `data/app.gschema.xml` | `lib/settings.rb` | settings | no |
-| `src/sessions.js` | `lib/session.rb` | model | no |
-| `src/Document.js` + `src/langs/*/\*Document.js` | `lib/document.rb` + per language | model | no |
+| `troll/src/widgets/ThemeSelector.js` | `lib/theme_selector.rb` | widget | yes |
+| `src/style.css` | `lib/style.rb` | stylesheet | yes |
+| `data/app.gschema.xml` | `lib/settings.rb` | settings | yes |
+| `src/sessions.js` | `lib/session.rb` | model | yes |
+| `src/Document.js` | `lib/document.rb` | model | partial |
+| `src/common.js` (`languages`, `getLanguage`) | `lib/language.rb` | table | yes |
+| `src/langs/xml/XmlDocument.js` | `lib/xml_document.rb` | model | yes |
+| `src/langs/xml/xml.js` + `ltx.js` | `lib/xml.rb` | library | yes |
+| `src/langs/javascript/*` | `lib/javascript_document.rb` + builder | model | no |
+| `src/langs/typescript/*` | `lib/type_script_document.rb` + compiler | model | no |
+| `src/langs/vala/*` | `lib/vala_document.rb` + compiler | model | no |
+| `src/langs/rust/*` | `lib/rust_document.rb` + compiler | model | no |
+| `src/langs/python/*` | `lib/python_document.rb` + builder | model | no |
+| `src/langs/blueprint/*` | `lib/blueprint_document.rb` | model | no |
+| `src/langs/css/*` | `lib/css_document.rb` | model | no |
 | `src/lsp/*` | `lib/lsp*.rb` | LSP client | no |
+| `src/icons/*`, `data/icons/*` | an `assets/`/`data/` path | icons | no |
 
-Twenty-nine port files to write, plus the application object to replace.
+Twenty-six rows are `yes` or `partial`; **seventeen are still `no`**, and five
+of those are user-facing units in their own right (Library, EntryRow,
+Extensions, Extension, Permissions) plus the hover provider and the preview
+window.
+
+### The next units, in order
+
+1. **Library + EntryRow** — the `app.library` button in the header bar is dead
+   today, and the Library is how a user meets the app at all. Blocked on the
+   `demos` submodule.
+2. **Extensions + Extension, Permissions** — the two dialogs the run pipeline
+   already wants to divert to, so `lib/window.rb`'s run path is incomplete
+   until they exist.
+3. **The language documents and the LSP client** — formatting, compiling and
+   diagnostics for the seven unported languages. `code_view.rb` already has
+   the diagnostic tags with nothing to fill them.
+4. **`preview_window.rb`** — a small, unblocked win that replaces the bare
+   window `internal_previewer.rb` conjures.
+5. **The external previewer** — needs the Vala decision first.
 
 ## Blockers
 
@@ -608,12 +672,16 @@ Twenty-nine port files to write, plus the application object to replace.
    `POTFILES`, no `LINGUAS` on `origin/main`; strings are wrapped in
    `gettext`/`_()` and in blueprint `_("…")` but the catalogue is kept
    elsewhere. Translation parity has no upstream artefact to port.
-4. **No GtkSourceView or Vte in the port's stack.** `nix/Gemfile` has exactly
-   two gems, `gtk4` and `adwaita`, and `flake.nix`'s `gtkStack` has neither
-   `gtksourceview` nor `vte`. Eight `CodeView`s and the whole Console depend on
-   them. Nothing in `lib/` can be written for those components until the dev
-   shell and the runtime bundle grow those libraries — and the Ruby binding
-   situation for GtkSourceView 5 needs checking before the editor is planned.
+4. **No GtkSourceView or Vte in the port's stack.** Still true at `f3be425`:
+   the `Gemfile` carries `gtk4` and `adwaita`, and `flake.nix`'s `gtkStack` has
+   neither `gtksourceview` nor `vte`. The first pass **worked around it rather
+   than waiting** — `code_view.rb` is a `Gtk::TextView`, `code_find.rb`
+   searches the buffer itself, `term_console.rb` is a text view — so the editor
+   has no syntax highlighting, no completion and no style schemes, and the
+   console does not follow a log. This is now a *standing* parity gap with
+   code committed on top of it: growing the stack later means rewriting those
+   three files, so decide before the hover provider and the LSP client are
+   planned on top of the same absence.
 5. **`src/libworkbench` is a C library with no Ruby equivalent.** It provides
    the `GtkSource.CompletionProvider` subclass (`WorkbenchCompletionProvider`,
    `RequestState`) the editor's completion is built on, plus the preview
@@ -628,6 +696,15 @@ Twenty-nine port files to write, plus the application object to replace.
 8. **No GSettings schema for the port.** Sixteen session keys and five app keys
    are read and bound all over upstream; the port needs a compiled schema and
    an install path before any panel can bind to one.
-9. **`Gtk.ShortcutsWindow` is deprecated in GTK 4.18.** Upstream uses it; the
-   pilot port used `Adwaita::ShortcutsDialog`. Decide once, before the
-   shortcuts component is written.
+9. ~~**`Gtk.ShortcutsWindow` is deprecated in GTK 4.18.**~~ **Decided:**
+   `lib/shortcuts_window.rb` uses `Adw.ShortcutsDialog`, as the pilot port did.
+   `Gtk::ShortcutsWindow` also cannot be constructed through the Ruby bindings
+   (`GtkWindow is not subtype of GtkShortcutsWindow`), so there was no choice.
+10. **`Gtk.BuilderScope` cannot be implemented from Ruby.** Upstream's internal
+   previewer installs one to resolve a previewed definition's `<signal>` to a
+   logging handler. The port cannot, so previewed signals are unconnected and
+   GTK logs a missing handler. No workaround is known; this is a permanent
+   parity gap unless the external previewer carries it.
+11. **The port ships no icons.** Upstream registers nineteen custom symbolics
+   through its resource path. Nothing in `lib/` does, so those icons render as
+   missing-image placeholders today — see the Icons and packaging section.
