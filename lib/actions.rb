@@ -1,0 +1,146 @@
+# frozen_string_literal: true
+
+require 'adwaita'
+
+require_relative 'settings'
+require_relative 'session'
+require_relative 'window'
+require_relative 'about_dialog'
+require_relative 'shortcuts_window'
+
+# Actions installs the application's actions, ported from upstream's
+# src/actions.js.
+#
+# These are the actions the primary menu and the application's accelerators
+# refer to: quitting, the About dialog, opening a URI or one of the platform
+# demos, the colour scheme, and the two that make windows — a new scratch
+# session, and a project chosen from disk.
+#
+# Upstream opens a project by handing the folder back to the application's
+# `open` handler and shows a captured screenshot through the XDG desktop
+# portal. The port has no portal dependency, so a project folder becomes a
+# session directly and a screenshot is revealed with Gtk.FileLauncher.
+class Actions
+  PLATFORM_TOOLS = %w[adwaita-1-demo gtk4-demo gtk4-widget-factory].freeze
+
+  ACCELERATORS = {
+    'app.quit'            => ['<Control>Q'],
+    'app.new'             => ['<Control>N'],
+    "app.open('project')" => ['<Control>O'],
+  }.freeze
+
+  def initialize(application:, app_settings: Settings.app)
+    @application = application
+    @app_settings = app_settings
+  end
+
+  attr_reader :application, :app_settings
+
+  def build
+    application.tap do |app|
+      simple_actions.each_value { |action| app.add_action(action) }
+      app.add_action(app_settings.create_action('color-scheme'))
+
+      action_quit.signal_connect('activate') { app.quit }
+      action_about.signal_connect('activate') { AboutDialog.new(app).present }
+      action_open_uri.signal_connect('activate') { |_action, target| open_uri(target.value) }
+      action_platform_tools.signal_connect('activate') do |_action, target|
+        platform_tool(target.value)
+      end
+      action_new.signal_connect('activate') { new_project }
+      action_open.signal_connect('activate') { open_project }
+      action_show_screenshot.signal_connect('activate') do |_action, target|
+        show_screenshot(target.value)
+      end
+
+      ACCELERATORS.each { |name, accelerators| app.set_accels_for_action(name, accelerators) }
+
+      shortcuts_window.build
+    end
+  end
+
+  # Opens a window on a session and reads its documents in.
+  def open_session(session)
+    Window.new(
+      application:  application,
+      session:      session,
+      app_settings: app_settings,
+    ).tap do |window|
+      window.build
+      window.load
+    end
+  end
+
+  def shortcuts_window = @shortcuts_window ||= ShortcutsWindow.new(application)
+
+  private
+
+    def simple_actions
+      @simple_actions ||= {
+        'quit'            => action_quit,
+        'about'           => action_about,
+        'open_uri'        => action_open_uri,
+        'platform_tools'  => action_platform_tools,
+        'new'             => action_new,
+        'open'            => action_open,
+        'show-screenshot' => action_show_screenshot,
+      }
+    end
+
+    def action_quit = @action_quit ||= Gio::SimpleAction.new('quit')
+    def action_about = @action_about ||= Gio::SimpleAction.new('about')
+    def action_new = @action_new ||= Gio::SimpleAction.new('new')
+
+    def action_open_uri
+      @action_open_uri ||= Gio::SimpleAction.new('open_uri', string_type)
+    end
+
+    def action_platform_tools
+      @action_platform_tools ||= Gio::SimpleAction.new('platform_tools', string_type)
+    end
+
+    def action_open = @action_open ||= Gio::SimpleAction.new('open', string_type)
+
+    def action_show_screenshot
+      @action_show_screenshot ||= Gio::SimpleAction.new('show-screenshot', string_type)
+    end
+
+    def string_type = GLib::VariantType.new('s')
+
+    def open_uri(uri)
+      Gtk::UriLauncher.new(uri).launch(application.active_window, nil) { |_source, _result| }
+    end
+
+    # Upstream only spawns the three tools it names, so a crafted target
+    # cannot run anything else.
+    def platform_tool(name)
+      if PLATFORM_TOOLS.include?(name)
+        Process.detach(Process.spawn(name, out: File::NULL, err: File::NULL))
+      end
+    rescue SystemCallError => error
+      warn("#{name}: #{error.message}")
+    end
+
+    def new_project = open_session(Session.create)
+
+    def open_project
+      Gtk::FileDialog.new.then do |chooser|
+        chooser.select_folder(application.active_window, nil) do |_source, result|
+          chooser.select_folder_finish(result).then do |folder|
+            if folder
+              Session.add_to_recent_projects(folder.path, settings: app_settings)
+              open_session(Session.new(folder.path))
+            end
+          end
+        rescue StandardError
+          # The chooser was dismissed.
+          nil
+        end
+      end
+    end
+
+    def show_screenshot(uri)
+      Gtk::FileLauncher.new(Gio::File.new_for_uri(uri))
+                       .open_containing_folder(application.active_window, nil) { |_s, _r| }
+    end
+end

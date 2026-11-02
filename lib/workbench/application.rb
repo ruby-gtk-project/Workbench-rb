@@ -1,54 +1,100 @@
 # frozen_string_literal: true
 
-require "gtk4"
-require "adwaita"
+require 'fileutils'
+
+require 'gtk4'
+require 'adwaita'
+
+require_relative '../settings'
+require_relative '../session'
+require_relative '../style'
+require_relative '../theme_selector'
+require_relative '../actions'
+require_relative '../window'
 
 module Workbench
-  # The port's application: one window, and a status page saying the port has
-  # not been written yet. Everything else grows from here — replace the status
-  # page with the real content, keep the shape.
+  # Application is the port's entry point, ported from upstream's
+  # src/application.js.
   #
-  # House style (see .claude/skills/ruby-gtk): every widget is a memoized
-  # method, all configuration lives in its `tap`, assembly happens only in
-  # `build`, and the launcher is one expression.
+  # On startup it installs the stylesheet, applies the stored colour scheme,
+  # registers the application actions, and reopens a window on every session
+  # it finds — a scratch session from the data directory, or a project
+  # remembered in `recent-projects`. With nothing to reopen it starts a new
+  # session, which is where upstream opens the Welcome demo on a first run and
+  # the Library after that; neither is ported yet.
+  #
+  # Upstream's application object is an Adw.Application. Adwaita::Application
+  # is broken in the Ruby bindings, so the application comes from Gtk and
+  # Adwaita is initialised by hand, which is what Adw.Application would do.
   class Application
+    APPLICATION_ID = 'org.rubygtkproject.Workbench'
+
+    def initialize(app_settings: Settings.app)
+      @app_settings = app_settings
+    end
+
+    attr_reader :app_settings
+
     def build
-      app.tap do
-        app.signal_connect("activate") do
-          window.tap do |win|
-            win.content = toolbar_view
-          end
+      app.tap do |application|
+        application.signal_connect('startup') do
+          Adwaita.init
+          FileUtils.mkdir_p(Session.data_dir)
+          Style.install
+          apply_color_scheme
+          app_settings.on_change('color-scheme') { apply_color_scheme }
+          actions.build
+        end
 
-          toolbar_view.tap do |view|
-            view.add_top_bar(header_bar)
-            view.content = status_page
-          end
+        application.signal_connect('activate') { restore_sessions }
 
-          window.present
+        application.signal_connect('open') do |_application, files, hint|
+          open_files(files, hint)
         end
       end
     end
 
-    # Adwaita::Application is broken in the Ruby bindings; the application
-    # object comes from Gtk and only the window is Adwaita.
-    def app = @app ||= Gtk::Application.new("org.rubygtkproject.Workbench", :default_flags)
+    def run(argv = []) = app.run(argv)
 
-    def window
-      @window ||= Adwaita::ApplicationWindow.new(app).tap do |win|
-        win.title = "Workbench"
-        win.set_default_size(800, 600)
-      end
+    def app
+      @app ||= Gtk::Application.new(APPLICATION_ID, :handles_open)
     end
 
-    def toolbar_view = @toolbar_view ||= Adwaita::ToolbarView.new
-    def header_bar = @header_bar ||= Adwaita::HeaderBar.new
-
-    def status_page
-      @status_page ||= Adwaita::StatusPage.new.tap do |page|
-        page.title = "Workbench"
-        page.description = "The Ruby port has not been written yet."
-        page.icon_name = "applications-engineering-symbolic"
-      end
+    def actions
+      @actions ||= Actions.new(application: app, app_settings: app_settings)
     end
+
+    private
+
+      def apply_color_scheme
+        Adwaita::StyleManager.default.color_scheme =
+          ThemeSelector::SCHEMES.fetch(app_settings.get_int('color-scheme'), :default)
+      end
+
+    # One window per session, as upstream's restoreSessions does, and a fresh
+    # session when there is nothing to restore.
+      def restore_sessions
+        if app.windows.empty?
+          Session.all(settings: app_settings).then do |sessions|
+            if sessions.empty?
+              actions.open_session(Session.create)
+            else
+              sessions.each { |session| actions.open_session(session) }
+            end
+          end
+        else
+          app.active_window.present
+        end
+      end
+
+    # Upstream only opens a folder handed to it with the "project" hint.
+      def open_files(files, hint)
+        files.first.then do |file|
+          if file && hint == 'project'
+            Session.add_to_recent_projects(file.path, settings: app_settings)
+            actions.open_session(Session.new(file.path))
+          end
+        end
+      end
   end
 end

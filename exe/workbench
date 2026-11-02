@@ -1,6 +1,14 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "workbench"
+# Entry point for the Ruby port of Workbench.
+#
+# Upstream's launcher is src/bin.js, which hands the folders named on the
+# command line to the application with the "project" hint. The port does the
+# same: the application has the HANDLES_OPEN flag, so a folder given here is
+# opened as a project and anything else starts the sessions that were left
+# open.
 
-Workbench::Application.new.build.run
+require 'workbench'
+
+Workbench::Application.new.build.run(ARGV)
