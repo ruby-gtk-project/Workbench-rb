@@ -96,6 +96,14 @@ Gem::Specification.new do |spec|
   spec.executables = ["workbench"]
   spec.require_paths = ["lib"]
 
+  # Runtime — the toolkit and this app's binding gems.
+  spec.add_dependency("gtk4", "~> 4.3")
+  spec.add_dependency("adwaita", "~> 4.3")
+  spec.add_dependency("glib2", "~> 4.3")
+  spec.add_dependency("ashpd", "~> 0.1")
+  spec.add_dependency("glycin", "~> 1.0")
+  spec.add_dependency("libshumate", "~> 1.0")
+
   # NOTE: It is preferable to list development dependencies in the gemspec due to increased
   #       visibility and discoverability.
   #       However, development dependencies in gemspec will install on
