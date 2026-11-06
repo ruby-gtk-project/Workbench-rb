@@ -188,15 +188,21 @@ class CodeView
     def emit_changed = @changed_callbacks.each(&:call)
 
     # Upstream's getItersAtRange, from src/lsp/sourceview.js.
+    #
+    # `offset:` alongside `line:` is this binding's keyword for a line offset
+    # (it reaches gtk_text_buffer_get_iter_at_line_offset); `line_offset:` is
+    # not a key the binding recognises, so a diagnostic range used to resolve
+    # to column 0 of each line regardless of where it actually started or
+    # ended.
     def iters_at_range(range)
       [
         buffer.get_iter_at(
-          line:        range[:start][:line],
-          line_offset: range[:start][:character],
+          line:   range[:start][:line],
+          offset: range[:start][:character],
         ),
         buffer.get_iter_at(
-          line:        range[:end][:line],
-          line_offset: range[:end][:character],
+          line:   range[:end][:line],
+          offset: range[:end][:character],
         ),
       ]
     end

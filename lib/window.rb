@@ -7,6 +7,13 @@ require_relative 'settings'
 require_relative 'session'
 require_relative 'document'
 require_relative 'xml_document'
+require_relative 'blueprint_document'
+require_relative 'javascript_document'
+require_relative 'type_script_document'
+require_relative 'vala_document'
+require_relative 'rust_document'
+require_relative 'python_document'
+require_relative 'css_document'
 require_relative 'code_view'
 require_relative 'app_menu'
 require_relative 'theme_selector'
@@ -45,10 +52,22 @@ class Window
     'reveal' => ['<Control>M'],
   }.freeze
 
-  # The languages this port can hold a document for. Blueprint is absent: its
-  # document is compiled by the blueprint-compiler language server, and
-  # lib/lsp_client.rb is not ported yet.
-  DOCUMENT_LANGUAGES = %w[javascript typescript vala rust python xml css].freeze
+  # The languages this port can hold a document for, now that lib/lsp_client.rb
+  # exists: every language's document, including blueprint's.
+  DOCUMENT_LANGUAGES = %w[javascript typescript vala rust python xml css blueprint].freeze
+
+  # Upstream's per-language Document subclass for each language that has one;
+  # xml's own document otherwise.
+  DOCUMENT_CLASSES = {
+    'blueprint'  => BlueprintDocument,
+    'javascript' => JavaScriptDocument,
+    'typescript' => TypeScriptDocument,
+    'vala'       => ValaDocument,
+    'rust'       => RustDocument,
+    'python'     => PythonDocument,
+    'css'        => CssDocument,
+    'xml'        => XmlDocument,
+  }.freeze
 
   PANEL_KEYS = %w[show-preview show-ui show-style show-code].freeze
 
@@ -199,7 +218,7 @@ class Window
       Language[id].then do |language|
         [
           id,
-          (id == 'xml' ? XmlDocument : Document).new(
+          DOCUMENT_CLASSES.fetch(id).new(
             session:   session,
             code_view: code_views.fetch(id),
             language:  language,
@@ -234,7 +253,7 @@ class Window
       button:       button_ui,
       application:  application,
       term_console: term_console,
-      documents:    { 'xml' => documents.fetch('xml') },
+      documents:    { 'xml' => documents.fetch('xml'), 'blueprint' => documents.fetch('blueprint') },
     )
   end
 

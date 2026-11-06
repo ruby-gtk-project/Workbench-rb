@@ -15,11 +15,11 @@ require_relative 'blueprint_experimental_dialog'
 # Upstream offers two syntaxes for the same document, Blueprint and XML, and
 # converts between them through the blueprint-compiler language server —
 # `textDocument/x-blueprint-compile` one way, `x-blueprint/decompile` the
-# other. The port has no language-server client yet, so the panel is
-# constructed with the documents it can actually drive: the dropdown lists
-# those, and `user-interface-language` is held to one of them. Pass a document
-# for `blueprint` once lib/lsp_client.rb exists and the second page, the
-# conversions and the experimental-syntax button all come back on.
+# other. lib/lsp_client.rb exists now, so Window passes a BlueprintDocument
+# alongside the XmlDocument: the dropdown lists both, the second page and the
+# experimental-syntax button are on, and the conversions work whenever
+# blueprint-compiler is on PATH. A panel still constructed with only an
+# `'xml'` document (as tests may do) falls back to the one page it can drive.
 class PanelUI
   def initialize(settings:, button:, application:, term_console:, documents:)
     @settings = settings
