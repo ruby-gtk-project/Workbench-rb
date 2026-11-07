@@ -11,6 +11,7 @@ require_relative '../style'
 require_relative '../theme_selector'
 require_relative '../actions'
 require_relative '../window'
+require_relative '../log_handler'
 
 module Workbench
   # Application is the port's entry point, ported from upstream's
@@ -38,6 +39,7 @@ module Workbench
     def build
       app.tap do |application|
         application.signal_connect('startup') do
+          LogHandler.install
           Adwaita.init
           FileUtils.mkdir_p(Session.data_dir)
           Style.install

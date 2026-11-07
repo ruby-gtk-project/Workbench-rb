@@ -24,6 +24,7 @@ require_relative 'panel_preview'
 require_relative 'previewer'
 require_relative 'devtools'
 require_relative 'save_project_dialog'
+require_relative 'permissions_dialog'
 
 # Window is one session open for editing, ported from upstream's
 # src/window.blp and src/window.js.
@@ -406,11 +407,14 @@ class Window
 
       window.add_action(settings.create_action('safe-mode'))
       window.add_action(settings.create_action('auto-preview'))
+      permissions_dialog.install_action
 
       ACTIONS.each do |name, accelerators|
         application.set_accels_for_action("win.#{name}", accelerators)
       end
     end
+
+    def permissions_dialog = @permissions_dialog ||= PermissionsDialog.new(window)
 
     def action_run = @action_run ||= Gio::SimpleAction.new('run')
     def action_format = @action_format ||= Gio::SimpleAction.new('format')
