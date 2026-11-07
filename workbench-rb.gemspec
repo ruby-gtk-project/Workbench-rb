@@ -101,8 +101,15 @@ Gem::Specification.new do |spec|
   spec.add_dependency("adwaita", "~> 4.3")
   spec.add_dependency("glib2", "~> 4.3")
   spec.add_dependency("ashpd", "~> 0.1")
-  spec.add_dependency("glycin", "~> 1.0")
   spec.add_dependency("libshumate", "~> 1.0")
+  # NOTE: glycin was declared here but nothing in lib/ or upstream (grepped
+  # the whole origin/main tree, case-insensitively, including the Vala, JS,
+  # Python and Rust-template sources) ever calls the Glycin namespace.
+  # Upstream's src/Previewer/meson.build links glycin-2 into the Vala
+  # previewer binary, but previewer.vala's own ensure_types() only
+  # type_ensures Shumate.SimpleMap and WebKit.WebView — glycin is never
+  # referenced by name anywhere, so there is no API call for this Ruby port
+  # to make. Removed rather than kept as a dependency nothing calls.
 
   # NOTE: It is preferable to list development dependencies in the gemspec due to increased
   #       visibility and discoverability.

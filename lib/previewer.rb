@@ -3,6 +3,7 @@
 require 'fileutils'
 
 require 'adwaita'
+require 'libshumate'
 
 require_relative 'session'
 require_relative 'xml'
@@ -29,12 +30,19 @@ require_relative 'internal_previewer'
 # the helper down instead of Workbench. That helper is src/Previewer/crasher.vala
 # and is not ported, so the session's `safe-mode` key is stored and shown but
 # does not yet pre-check a definition.
+#
+# Upstream's previewer.vala registers GObject types up front (`ensure_types`)
+# so a demo's `<object class="ShumateSimpleMap">` resolves through
+# Gtk::Builder even though nothing in Workbench itself ever instantiates one
+# directly; `ensure_types` below does the same with the libshumate GI binding,
+# and 'Shumate' is added to NAMESPACES so `object_class` can find it.
 class Previewer
   # The namespaces a GTK Builder class name can be in, longest prefix first so
   # `Gtk` is matched before `G`.
   NAMESPACES = {
     'Graphene' => 'Graphene',
     'Pango'    => 'Pango',
+    'Shumate'  => 'Shumate',
     'Gtk'      => 'Gtk',
     'Adw'      => 'Adwaita',
     'Gdk'      => 'Gdk',
@@ -65,6 +73,8 @@ class Previewer
   attr_reader :panel, :xml_source, :css_view, :term_console, :settings, :session
 
   def build
+    ensure_types
+
     panel.tap do |preview|
       settings.bind('preview-align', preview.dropdown_align, 'selected')
       preview.dropdown_align.signal_connect('notify::selected') { apply_align }
@@ -191,6 +201,13 @@ class Previewer
   def self.module_for(namespace) = Object.const_get(namespace)
 
   private
+
+    # Upstream's Previewer#ensure_types (previewer.vala): registers the GI
+    # types a previewed definition can reference but nothing in Workbench
+    # itself constructs, so Gtk::Builder can still find them by class name.
+    def ensure_types
+      Shumate::SimpleMap.gtype
+    end
 
     def source
       xml_source.xml.to_s.strip.then do |text|

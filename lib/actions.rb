@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'adwaita'
+require 'ashpd'
 
 require_relative 'settings'
 require_relative 'session'
@@ -18,8 +19,10 @@ require_relative 'shortcuts_window'
 #
 # Upstream opens a project by handing the folder back to the application's
 # `open` handler and shows a captured screenshot through the XDG desktop
-# portal. The port has no portal dependency, so a project folder becomes a
-# session directly and a screenshot is revealed with Gtk.FileLauncher.
+# portal (Xdp.Portal#open_directory). The port reaches that same portal
+# through the ashpd gem's Ashpd::OpenUri — a Rust/zbus binding rather than
+# the libportal GI typelib upstream uses, but the same
+# org.freedesktop.portal.OpenURI call.
 class Actions
   PLATFORM_TOOLS = %w[adwaita-1-demo gtk4-demo gtk4-widget-factory].freeze
 
@@ -139,8 +142,22 @@ class Actions
       end
     end
 
+    # Ashpd::OpenUri.open talks to a real xdg-desktop-portal over D-Bus and
+    # blocks the calling thread until the user answers any dialog it shows
+    # (see the ashpd gem's own docs), so it runs off the main loop. Without a
+    # running portal — true of a headless/sandbox-less dev shell — it raises
+    #   RuntimeError: Portal request failed: org.freedesktop.zbus.Error: The name is not activatable
+    # which falls back to Gtk::FileLauncher, the port's original stand-in.
     def show_screenshot(uri)
-      Gtk::FileLauncher.new(Gio::File.new_for_uri(uri))
-                       .open_containing_folder(application.active_window, nil) { |_s, _r| }
+      Thread.new do
+        Ashpd::OpenUri.open(uri, false, false)
+      rescue StandardError => error
+        warn("screenshot portal unavailable (#{error.message}), falling back to FileLauncher")
+        GLib::Idle.add do
+          Gtk::FileLauncher.new(Gio::File.new_for_uri(uri))
+                           .open_containing_folder(application.active_window, nil) { |_s, _r| }
+          false
+        end
+      end
     end
 end

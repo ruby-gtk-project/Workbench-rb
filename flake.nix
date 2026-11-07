@@ -25,9 +25,10 @@
           libadwaita
           harfbuzz
           librsvg
-          # Carrying the typelibs for this app's binding gems. gtkStack feeds
-          # both buildInputs and typelibPath, so one list does both jobs.
-          libglycin
+          # Carrying the typelib for this app's libshumate binding gem.
+          # gtkStack feeds both buildInputs and typelibPath, so one list does
+          # both jobs. No libglycin here: the glycin gem was dropped (see
+          # workbench-rb.gemspec) because nothing calls it.
           libshumate
         ]
         # The Ruby `pkg-config` gem resolves `Requires.private` transitively and
