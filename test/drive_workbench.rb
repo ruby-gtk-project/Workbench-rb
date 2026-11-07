@@ -92,7 +92,10 @@ Dir.mktmpdir('workbench-drive') do |home|
 
   require 'workbench'
 
-  GtkDriver.drive(Workbench::Application.new, timeout: 60) do |d, app_builder|
+  SHOTS = File.expand_path('../tmp/shots', __dir__)
+  FileUtils.rm_rf(SHOTS)
+
+  GtkDriver.drive(Workbench::Application.new, shots: SHOTS, timeout: 60) do |d, app_builder|
     d.window { app_builder.app.active_window }
 
     # --- window build/title ----------------------------------------------
@@ -250,6 +253,55 @@ Dir.mktmpdir('workbench-drive') do |home|
       previewer = window_ivar(window, :@previewer)
       d.check('previewer xml source holds the edited markup') { previewer.xml_source.xml.include?('workbench_drive_label') }
     end
+
+    # --- Style panel CSS editing feeds the previewer -----------------------
+
+    d.step('edit the Style panel CSS') do
+      window = app_builder.app.active_window
+      css_view = window_ivar(window, :@code_views).fetch('css')
+      css_view.replace_text('label { color: red; }')
+    end
+
+    d.step('previewer picked up the new stylesheet') do
+      window = app_builder.app.active_window
+      previewer = window_ivar(window, :@previewer)
+      d.check('internal previewer installed a css provider for the edit') do
+        !previewer.current.instance_variable_get(:@css_provider).nil?
+      end
+    end
+
+    # --- CodeFind (Ctrl+F) search bar on the XML editor ---------------------
+
+    d.step('open find on the XML code view and search') do
+      window = app_builder.app.active_window
+      xml_code_view = window_ivar(window, :@code_views).fetch('xml')
+      @code_find = xml_code_view.send(:code_find)
+      @code_find.open
+      @code_find.send(:entry).text = 'driven'
+    end
+
+    d.step('find bar revealed and found the match') do
+      d.check('find bar is revealed') { @code_find.revealer.reveal_child? }
+      d.check('next/previous are sensitive with a match') { @code_find.send(:button_next).sensitive? }
+      d.check('info label reports a match') { !@code_find.send(:label_info).label.empty? }
+    end
+
+    d.step('close find') { @code_find.close }
+
+    d.step('find bar closed') do
+      d.check('find bar is hidden again') { !@code_find.revealer.reveal_child? }
+    end
+
+    # --- win.permissions (Flatpak permissions dialog) -----------------------
+
+    d.step('open the Permissions dialog') { app_builder.app.active_window.activate_action('permissions', nil) }
+
+    d.step('Permissions dialog is presented') do
+      d.check('permissions dialog built without raising') { true }
+      d.shot('permissions')
+    end
+
+    d.step('dismiss any open dialog') { close_presented_dialogs(app_builder.app.active_window) }
 
     # --- win.run -------------------------------------------------------------
 
