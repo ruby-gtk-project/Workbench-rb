@@ -60,8 +60,6 @@ class TermConsole
         popover_menu.popup
       end
 
-      popover_menu.set_parent(text_view)
-
       install_colors_provider
       Adwaita::StyleManager.default.signal_connect('notify::dark') { update_colors }
       update_colors
@@ -132,10 +130,16 @@ class TermConsole
       end
     end
 
+    # Parented lazily, on the first right-click, rather than unconditionally
+    # from `build`: a popover kept permanently parented to a GtkTextView that
+    # is never shown is what produced a storm of "GtkPopoverMenu is not a
+    # child of GtkTextView" warnings — and the CPU-pinned hang that came with
+    # it — the moment a second window (and so a second such popover) existed.
     def popover_menu
       @popover_menu ||= Gtk::PopoverMenu.new(menu_model).tap do |popover|
         popover.has_arrow = false
         popover.halign = :start
+        popover.set_parent(text_view)
       end
     end
 

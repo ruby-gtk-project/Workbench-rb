@@ -151,19 +151,38 @@ class Settings
     end
   end
 
-  # Upstream's settings.create_action(key) — a stateful action whose state is
-  # the boolean key, so a menu item can toggle it.
+  # Upstream's settings.create_action(key): Gio.Settings picks the action's
+  # parameter and state type off the schema key's own GVariant type, so a
+  # boolean key toggles with no parameter and an int (or enum) key's action
+  # carries the chosen value as its parameter. Only the boolean and integer
+  # shapes are needed here — every key this is called on (`color-scheme`,
+  # `safe-mode`, `auto-preview`) is one or the other.
   def create_action(key)
-    Gio::SimpleAction.new(key.to_s, nil, GLib::Variant.new(get_boolean(key))).tap do |action|
-      action.signal_connect('activate') do |this, _parameter|
-        set_boolean(key, !get_boolean(key))
-        this.set_state(GLib::Variant.new(get_boolean(key)))
-      end
-      on_change(key) { |value| action.set_state(GLib::Variant.new(value == true)) }
-    end
+    defaults.fetch(key.to_s).is_a?(Integer) ? create_int_action(key) : create_boolean_action(key)
   end
 
   private
+
+    def create_boolean_action(key)
+      Gio::SimpleAction.new(key.to_s, nil, GLib::Variant.new(get_boolean(key))).tap do |action|
+        action.signal_connect('activate') do |this, _parameter|
+          set_boolean(key, !get_boolean(key))
+          this.set_state(GLib::Variant.new(get_boolean(key)))
+        end
+        on_change(key) { |value| action.set_state(GLib::Variant.new(value == true)) }
+      end
+    end
+
+    def create_int_action(key)
+      int_type = GLib::VariantType.new('i')
+      Gio::SimpleAction.new(key.to_s, int_type, GLib::Variant.new(get_int(key), int_type)).tap do |action|
+        action.signal_connect('activate') do |this, parameter|
+          set_int(key, parameter.to_i)
+          this.set_state(GLib::Variant.new(get_int(key), int_type))
+        end
+        on_change(key) { |value| action.set_state(GLib::Variant.new(value.to_i, int_type)) }
+      end
+    end
 
     def notify(key)
       @listeners.each do |listened, block|
