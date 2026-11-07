@@ -46,14 +46,19 @@ class Actions
 
       action_quit.signal_connect('activate') { app.quit }
       action_about.signal_connect('activate') { AboutDialog.new(app).present }
-      action_open_uri.signal_connect('activate') { |_action, target| open_uri(target.value) }
+      # Ruby-GNOME unwraps a simple-typed GVariant parameter to its native
+      # Ruby value before the 'activate' handler sees it, so `target` here is
+      # already a plain String, not a GLib::Variant — calling `.value` on it
+      # raised NoMethodError and made these three actions unreachable the
+      # moment they were actually activated.
+      action_open_uri.signal_connect('activate') { |_action, target| open_uri(target) }
       action_platform_tools.signal_connect('activate') do |_action, target|
-        platform_tool(target.value)
+        platform_tool(target)
       end
       action_new.signal_connect('activate') { new_project }
       action_open.signal_connect('activate') { open_project }
       action_show_screenshot.signal_connect('activate') do |_action, target|
-        show_screenshot(target.value)
+        show_screenshot(target)
       end
 
       ACCELERATORS.each { |name, accelerators| app.set_accels_for_action(name, accelerators) }

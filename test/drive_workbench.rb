@@ -254,6 +254,82 @@ Dir.mktmpdir('workbench-drive') do |home|
       d.check('previewer xml source holds the edited markup') { previewer.xml_source.xml.include?('workbench_drive_label') }
     end
 
+    # --- previewer resolves a ShumateSimpleMap definition (libshumate) ------
+    #
+    # Exercises the actual gem call Previewer#ensure_types makes
+    # (Shumate::SimpleMap.gtype) by feeding a real definition through the
+    # same pipeline as the XML-editing step above, rather than only checking
+    # that the gem loads: a Gtk::Builder resolving `class="ShumateSimpleMap"`
+    # into a real Shumate::SimpleMap instance proves the type was registered.
+
+    d.step('feed a ShumateSimpleMap definition through the UI document') do
+      window = app_builder.app.active_window
+      xml_document = window_ivar(window, :@documents).fetch('xml')
+      xml_document.code_view.replace_text(<<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <interface>
+          <object class="ShumateSimpleMap" id="workbench_drive_map"/>
+        </interface>
+      XML
+    end
+
+    d.step('previewer built the ShumateSimpleMap through Gtk::Builder') do
+      window = app_builder.app.active_window
+      previewer = window_ivar(window, :@previewer)
+      d.check('previewer resolves ShumateSimpleMap to the libshumate gem class') do
+        Previewer.object_class('ShumateSimpleMap') == Shumate::SimpleMap
+      end
+      d.check('previewer actually built a Shumate::SimpleMap instance') do
+        previewer.current.panel.output.child.is_a?(Shumate::SimpleMap)
+      end
+    end
+
+    # Restores the document the later CodeFind step depends on: it searches
+    # for 'driven', which the Shumate probe above just overwrote.
+    d.step('restore the XML document after the Shumate probe') do
+      window = app_builder.app.active_window
+      xml_document = window_ivar(window, :@documents).fetch('xml')
+      xml_document.code_view.replace_text(<<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <interface>
+          <object class="GtkLabel" id="workbench_drive_label">
+            <property name="label">driven</property>
+          </object>
+        </interface>
+      XML
+    end
+
+    # --- win.show-screenshot calls the real ashpd portal binding ------------
+    #
+    # Exercises the actual gem call Actions#show_screenshot makes
+    # (Ashpd::OpenUri.open), not just that `require 'ashpd'` succeeded. This
+    # headless dev shell has no running xdg-desktop-portal, so the call is
+    # expected to raise and the warning below is only emitted from inside the
+    # rescue that wraps that specific call.
+
+    d.step('activate app.show-screenshot with a fake capture uri') do
+      # `warn` runs with `self` bound to whatever object calls it (the
+      # Actions instance here), so the captured result is stashed in a
+      # global rather than an instance variable, which `@screenshot_warning`
+      # on the *redefined method's* receiver would silently not be.
+      $screenshot_warning = nil
+      original_warn = Kernel.instance_method(:warn)
+      Kernel.define_method(:warn) do |*args|
+        if args.any? { |a| a.to_s.include?('screenshot portal unavailable') }
+          $screenshot_warning = args.join(' ')
+        end
+        original_warn.bind(self).call(*args)
+      end
+      app_builder.app.activate_action(
+        'show-screenshot', GLib::Variant.new('file:///tmp/workbench-drive-shot.png', GLib::VariantType.new('s'))
+      )
+      sleep(0.5) # the ashpd call runs on its own Thread; give it a moment to fail and warn
+    end
+
+    d.step('ashpd portal call ran and failed over to the FileLauncher fallback') do
+      d.check('Ashpd::OpenUri.open was actually called (portal-unavailable warning fired)') { !$screenshot_warning.nil? }
+    end
+
     # --- Style panel CSS editing feeds the previewer -----------------------
 
     d.step('edit the Style panel CSS') do
