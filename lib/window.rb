@@ -25,6 +25,7 @@ require_relative 'previewer'
 require_relative 'devtools'
 require_relative 'save_project_dialog'
 require_relative 'permissions_dialog'
+require_relative 'extensions_dialog'
 
 # Window is one session open for editing, ported from upstream's
 # src/window.blp and src/window.js.
@@ -39,12 +40,10 @@ require_relative 'permissions_dialog'
 # only forgotten, an untouched session is deleted, and an edited one asks
 # whether to keep it.
 #
-# Two things upstream does here are missing because the components they belong
+# One thing upstream does here is missing because the components it belongs
 # to are not ported: the per-language builders and compilers
 # (src/langs/*/Builder.js and Compiler.js), so Run formats the documents and
-# redraws the preview but does not execute the code; and the Extensions and
-# Permissions dialogs, so `win.extensions` and `win.permissions` have no
-# action behind them yet and their menu items are insensitive.
+# redraws the preview but does not execute the code.
 class Window
   ACTIONS = {
     'run'    => ['<Control>Return'],
@@ -408,6 +407,7 @@ class Window
       window.add_action(settings.create_action('safe-mode'))
       window.add_action(settings.create_action('auto-preview'))
       permissions_dialog.install_action
+      extensions_dialog.install_action
 
       ACTIONS.each do |name, accelerators|
         application.set_accels_for_action("win.#{name}", accelerators)
@@ -415,6 +415,7 @@ class Window
     end
 
     def permissions_dialog = @permissions_dialog ||= PermissionsDialog.new(window)
+    def extensions_dialog = @extensions_dialog ||= ExtensionsDialog.new(window)
 
     def action_run = @action_run ||= Gio::SimpleAction.new('run')
     def action_format = @action_format ||= Gio::SimpleAction.new('format')

@@ -13,6 +13,7 @@
 
 require 'fileutils'
 require 'tmpdir'
+require 'json'
 
 require_relative 'gtk_driver'
 
@@ -378,6 +379,117 @@ Dir.mktmpdir('workbench-drive') do |home|
     end
 
     d.step('dismiss any open dialog') { close_presented_dialogs(app_builder.app.active_window) }
+
+    # --- win.extensions (SDK extension install guide) ------------------------
+    #
+    # Real sandbox probing: each row's `available` comes from
+    # ExtensionsDialog.*_available?, which checks for a real
+    # `/usr/lib/sdk/<extension>` directory, so this asserts the row actually
+    # matches that filesystem check rather than merely not raising.
+
+    d.step('open the Extensions dialog') { app_builder.app.active_window.activate_action('extensions', nil) }
+
+    d.step('Extensions dialog reflects real SDK availability') do
+      window = window_ivar_from_window(app_builder.app.active_window)
+      extensions_dialog = window.send(:extensions_dialog)
+      extensions_dialog.build
+      vala_row = extensions_dialog.send(:extension_vala)
+      d.check('Vala row.available matches a real /usr/lib/sdk/vala check') do
+        vala_row.available == ExtensionsDialog.vala_available?
+      end
+      d.check('an unavailable row carries a real flatpak install command') do
+        vala_row.available || vala_row.command.include?('flatpak install')
+      end
+      d.shot('extensions')
+    end
+
+    d.step('dismiss any open dialog') { close_presented_dialogs(app_builder.app.active_window) }
+
+    # --- app.library (Library of Demos and Examples) -------------------------
+    #
+    # No demo corpus ships with the gem (see lib/library_window.rb), so this
+    # points LibraryWindow at a fixture corpus with one real demo directory,
+    # then drives the whole path upstream's Library.js/EntryRow.js cover:
+    # search filtering, and clicking a demo through to a real Session copied
+    # onto disk and a new window opened on it.
+
+    d.step('stock a fixture demo corpus for the Library window') do
+      fixture_dir = Dir.mktmpdir('workbench-library-fixture')
+      demo_dir = File.join(fixture_dir, 'Driven Demo')
+      FileUtils.mkdir_p(demo_dir)
+      File.write(File.join(demo_dir, 'main.js'), '// driven demo')
+      File.write(
+        File.join(fixture_dir, 'index.json'),
+        JSON.generate(
+          [
+            {
+              'name'        => 'Driven Demo',
+              'description' => 'A demo stocked by the drive script',
+              'category'    => 'tools',
+              'languages'   => ['javascript'],
+              'panels'      => ['code'],
+            },
+          ],
+        ),
+      )
+      LibraryWindow.define_singleton_method(:demos_dir) { fixture_dir }
+      LibraryWindow.instance_variable_set(:@demos, nil)
+    end
+
+    d.step('open the Library window') do
+      @main_window = app_builder.app.active_window
+      @library_window = app_builder.actions.library_window
+      app_builder.app.activate_action('library', nil)
+    end
+
+    d.step('Library window lists the fixture demo') do
+      d.check('the Library window is open') { @library_window.send(:window).visible? }
+      @library_entries = @library_window.send(:entries)
+      d.check('the fixture demo got a real EntryRow') { @library_entries.any? { |e| e[:demo]['name'] == 'Driven Demo' } }
+    end
+
+    d.step('search the Library for text that matches nothing') do
+      @library_window.send(:search_entry).text = 'does not exist anywhere'
+    end
+
+    d.step('no-match search shows the empty-results placeholder') do
+      d.check('results_empty is visible for a non-matching search') { @library_window.send(:results_empty).visible? }
+    end
+
+    d.step('clear the search so the fixture demo is visible again') do
+      @library_window.send(:search_entry).text = ''
+    end
+
+    d.step('no-match placeholder hides once the search clears') do
+      d.check('results_empty is hidden again') { !@library_window.send(:results_empty).visible? }
+      entry = @library_entries.find { |e| e[:demo]['name'] == 'Driven Demo' }
+      d.check('the fixture demo row is visible again') { entry[:row].visible? }
+    end
+
+    d.step('activate the fixture demo through its EntryRow') do
+      entry = @library_entries.find { |e| e[:demo]['name'] == 'Driven Demo' }
+      @windows_before = app_builder.app.windows.size
+      entry[:row].signal_emit('activated')
+    end
+
+    d.step('activating the demo copied it into a real session and opened a window') do
+      d.check('a new window opened for the demo') { app_builder.app.windows.size > @windows_before }
+      new_window = app_builder.app.windows.find { |w| w.title.to_s.include?('Driven Demo') }
+      d.check('the new window names the demo') { !new_window.nil? }
+      session = new_window && window_ivar_from_window(new_window)&.session
+      d.check('the session copied main.js onto disk') { session && File.exist?(session.file('main.js')) }
+      @driven_window = new_window
+    end
+
+    d.step('close the demo window and the Library window') do
+      window_ivar_from_window(@driven_window)&.window&.close
+      # The Library window is `hide_on_close`, same as upstream's, so a plain
+      # `close` only hides it — it would otherwise linger in
+      # `app.windows` for the rest of this drive and throw off every window
+      # count the later steps assert on.
+      @library_window.send(:window).destroy
+      @main_window.present
+    end
 
     # --- win.run -------------------------------------------------------------
 

@@ -8,6 +8,7 @@ require_relative 'session'
 require_relative 'window'
 require_relative 'about_dialog'
 require_relative 'shortcuts_window'
+require_relative 'library_window'
 
 # Actions installs the application's actions, ported from upstream's
 # src/actions.js.
@@ -64,6 +65,7 @@ class Actions
       ACCELERATORS.each { |name, accelerators| app.set_accels_for_action(name, accelerators) }
 
       shortcuts_window.build
+      library_window.install_action
     end
   end
 
@@ -80,6 +82,12 @@ class Actions
   end
 
   def shortcuts_window = @shortcuts_window ||= ShortcutsWindow.new(application)
+
+  def library_window
+    @library_window ||= LibraryWindow.new(application: application, app_settings: app_settings) do |session|
+      open_session(session)
+    end
+  end
 
   private
 
