@@ -35,29 +35,45 @@ per-component sections below.
 
 ## Status
 
-Re-checked against `lib/` at `f3be425`. The first porting pass
-(`d878d16`, "Port the window, panels, previewer, documents and app actions")
-landed twenty-five files and roughly 4,700 lines, so the scaffold line this
-section used to carry is gone: the app now opens a real window with four
-panels, an editor, a console, a previewer and the app menu.
+Re-checked against `lib/` at `4353dd3` ("Add a real end-to-end drive test and
+fix the hang it found"). Three passes have landed since the `f3be425` survey
+this document was last written against: `20c4b60` wired `ashpd`, `glycin`
+and `libshumate` into the gemspec/Gemfile/flake (see "Binding-gem audit"
+below — none of the three is actually called from any component yet, because
+the components that would call them are the ones still listed as unported),
+and `b5c0bcc` ported the LSP client and the remaining seven per-language
+documents. The app now opens a real window with four panels, an editor, a
+console, a previewer, the app menu, and every code/UI/style document talks to
+a real language server.
 
-**Ported (24 files + the application object):** `lib/workbench/application.rb`,
+**Ported (35 files + the application object):** `lib/workbench/application.rb`,
 `actions.rb`, `about_dialog.rb`, `shortcuts_window.rb`, `window.rb`,
 `app_menu.rb`, `theme_selector.rb`, `panel_code.rb`, `panel_style.rb`,
 `panel_ui.rb`, `panel_preview.rb`, `previewer.rb`, `internal_previewer.rb`,
 `devtools.rb`, `term_console.rb`, `code_view.rb`, `code_find.rb`,
 `save_project_dialog.rb`, `blueprint_experimental_dialog.rb`, `settings.rb`,
-`session.rb`, `document.rb`, `language.rb`, `style.rb`, plus `xml.rb` and
-`xml_document.rb` for the UI panel's XML path.
+`session.rb`, `document.rb`, `language.rb`, `style.rb`, `xml.rb` and
+`xml_document.rb` for the UI panel's XML path, plus — new since `f3be425` —
+`lsp.rb`, `lsp_client.rb`, `lsp_sourceview.rb`, `lsp_document.rb` (the LSP
+client and the shared per-language-document shape it holds once) and the
+seven remaining per-language documents: `javascript_document.rb`,
+`type_script_document.rb`, `vala_document.rb`, `rust_document.rb`,
+`python_document.rb`, `css_document.rb`, `blueprint_document.rb`. Every
+document now starts its upstream language server and formats through it;
+`vala_document.rb`, `rust_document.rb` and `type_script_document.rb` each
+still admit in their own header that the per-language project scaffolding
+(`setupRustProject`, `setupTypeScriptProject`, the Vala API stub) and the
+Builder/Compiler files behind it are not ported, and that the Extensions gate
+(`isRustAvailable()` etc.) is dropped in favour of just trying to start the
+server and logging if the binary is missing.
 
 **Not ported at all — five user-facing units and their rows:** the Library
 window and its demo rows, the Extensions dialog and its rows, the Permissions
 dialog, the diagnostic hover provider, and the windowed preview window from
 `src/libworkbench`. Behind them: the out-of-process previewer (External +
-D-Bus + the two Vala programs), the LSP client, and seven of the eight
-language documents (only `xml_document.rb` exists, so there is no formatting,
-no compiling, no diagnostics and no language server for JavaScript,
-TypeScript, Vala, Rust, Python, Blueprint or CSS).
+D-Bus + the two Vala programs) and the per-language Builder/Compiler files
+(project scaffolding and actually running/compiling code — `Window#run`
+formats and redraws the preview but still does not execute anything).
 
 **Ported with a known substitution**, because the dev shell has neither
 GtkSourceView nor Vte bindings: `code_view.rb` is a `Gtk::TextView` where
@@ -543,7 +559,7 @@ directory, settings instance, demo copying, save-as-project, recent projects,
 diagnostics). The save/discard dialog, the window title, the dirty tracking
 and every diagnostic underline come from here.
 
-→ `lib/session.rb` — **ported.** `lib/document.rb` — **ported**, reading and writing the file directly rather than through `GtkSource.FileLoader`/`FileSaver`. `lib/language.rb` — **ported** (upstream's `src/common.js` language table). Per-language documents: only `lib/xml_document.rb` exists; the JavaScript, TypeScript, Vala, Rust, Python, Blueprint and CSS documents, their builders and compilers, are **missing**.
+→ `lib/session.rb` — **ported.** `lib/document.rb` — **ported**, reading and writing the file directly rather than through `GtkSource.FileLoader`/`FileSaver`. `lib/language.rb` — **ported** (upstream's `src/common.js` language table). Per-language documents: all eight now exist (`lib/xml_document.rb`, `javascript_document.rb`, `type_script_document.rb`, `vala_document.rb`, `rust_document.rb`, `python_document.rb`, `css_document.rb`, `blueprint_document.rb`), each starting its upstream language server through `lib/lsp_document.rb` and `lib/lsp_client.rb` (ported from `src/lsp/LSPClient.js`) and formatting through `lib/lsp_sourceview.rb` (ported from `src/lsp/sourceview.js`). Still **missing**: every Builder/Compiler file (`src/langs/*/Builder.js`, `Compiler.js`) — the project scaffolding (`jsconfig.json`, `Cargo.toml`, `tsconfig.json`, the Vala API stub) and the actual compile/run step for Vala, Rust and TypeScript — and the Extensions-system availability gate each upstream document checks before starting its server, which this port replaces with "try to start, log if the binary is missing."
 
 ### `src/window.blp` `alert_dialog_save_project` (+ `button_location`) — unsaved-session prompt
 
@@ -586,7 +602,7 @@ preview window's template.
 
 ## Summary table
 
-`Present` is as of `f3be425`. `yes` means the file exists and carries the
+`Present` is as of `4353dd3`. `yes` means the file exists and carries the
 component; `partial` means it exists with a parity gap named in the section
 above; `no` means nothing has been written.
 
@@ -627,20 +643,27 @@ above; `no` means nothing has been written.
 | `src/common.js` (`languages`, `getLanguage`) | `lib/language.rb` | table | yes |
 | `src/langs/xml/XmlDocument.js` | `lib/xml_document.rb` | model | yes |
 | `src/langs/xml/xml.js` + `ltx.js` | `lib/xml.rb` | library | yes |
-| `src/langs/javascript/*` | `lib/javascript_document.rb` + builder | model | no |
-| `src/langs/typescript/*` | `lib/type_script_document.rb` + compiler | model | no |
-| `src/langs/vala/*` | `lib/vala_document.rb` + compiler | model | no |
-| `src/langs/rust/*` | `lib/rust_document.rb` + compiler | model | no |
-| `src/langs/python/*` | `lib/python_document.rb` + builder | model | no |
-| `src/langs/blueprint/*` | `lib/blueprint_document.rb` | model | no |
-| `src/langs/css/*` | `lib/css_document.rb` | model | no |
-| `src/lsp/*` | `lib/lsp*.rb` | LSP client | no |
+| `src/langs/javascript/JavaScriptDocument.js` (not `Builder.js`) | `lib/javascript_document.rb` | model | partial |
+| `src/langs/typescript/TypeScriptDocument.js` (not `Compiler.js`) | `lib/type_script_document.rb` | model | partial |
+| `src/langs/vala/ValaDocument.js` (not `Compiler.js`) | `lib/vala_document.rb` | model | partial |
+| `src/langs/rust/RustDocument.js` (not `Compiler.js`) | `lib/rust_document.rb` | model | partial |
+| `src/langs/python/PythonDocument.js` (not `Builder.js`) | `lib/python_document.rb` | model | partial |
+| `src/langs/blueprint/BlueprintDocument.js` | `lib/blueprint_document.rb` | model | yes |
+| `src/langs/css/CssDocument.js` | `lib/css_document.rb` | model | yes |
+| `src/langs/javascript/Builder.js` | — | project builder | no |
+| `src/langs/python/Builder.js` | — | project builder | no |
+| `src/langs/rust/Compiler.js` | — | compiler driver | no |
+| `src/langs/typescript/Compiler.js` | — | compiler driver | no |
+| `src/langs/vala/Compiler.js` | — | compiler driver | no |
+| `src/lsp/LSP.js` | `lib/lsp.rb` | LSP constants | yes |
+| `src/lsp/LSPClient.js` | `lib/lsp_client.rb` | LSP client | yes |
+| `src/lsp/sourceview.js` | `lib/lsp_sourceview.rb` | LSP text-edit apply | yes |
 | `src/icons/*`, `data/icons/*` | an `assets/`/`data/` path | icons | no |
 
-Twenty-six rows are `yes` or `partial`; **seventeen are still `no`**, and five
+Thirty-six rows are `yes` or `partial`; **sixteen are still `no`**, and five
 of those are user-facing units in their own right (Library, EntryRow,
 Extensions, Extension, Permissions) plus the hover provider and the preview
-window.
+window; the rest are the five Builder/Compiler drivers and the icon path.
 
 ### The next units, in order
 
@@ -650,12 +673,46 @@ window.
 2. **Extensions + Extension, Permissions** — the two dialogs the run pipeline
    already wants to divert to, so `lib/window.rb`'s run path is incomplete
    until they exist.
-3. **The language documents and the LSP client** — formatting, compiling and
-   diagnostics for the seven unported languages. `code_view.rb` already has
-   the diagnostic tags with nothing to fill them.
+3. **The per-language Builder/Compiler drivers** — now that every document
+   starts its language server (ported in `b5c0bcc`), the remaining gap is
+   project scaffolding and actually compiling/running Vala, Rust, TypeScript,
+   JavaScript and Python. `Window#run` still only formats and redraws the
+   preview; it executes nothing.
 4. **`preview_window.rb`** — a small, unblocked win that replaces the bare
    window `internal_previewer.rb` conjures.
 5. **The external previewer** — needs the Vala decision first.
+
+## Binding-gem audit (ashpd / glycin / libshumate)
+
+Wired in `20c4b60`: `workbench-rb.gemspec` declares `gtk4`, `adwaita`,
+`glib2`, `ashpd`, `glycin` and `libshumate` as runtime dependencies;
+`nix/Gemfile` lists the same six; `flake.nix`'s `gtkStack` feeds both
+`buildInputs` and `typelibPath`, and the ashpd platform-gem comment there
+shows the explicit gemfile/lockfile/gemset pattern (not `gemdir`) already in
+place for ashpd's Rust-gem variants. No defect found in the wiring itself.
+
+But `grep -rn "Ashpd\|Gly::\|Shumate" lib/` returns **no matches** — nothing
+in `lib/` calls into any of the three gems yet, because the upstream call
+sites are in the components still listed as unported above:
+
+- **Ashpd** belongs to `src/flatpak.js` (`getFlatpakId`, `getFlatpakInfo`,
+  `isDeviceInputOverrideAvailable`), which backs the Permissions dialog, the
+  Extensions dialog, and the About dialog's Flatpak version line. None of
+  `lib/flatpak.rb`, `lib/permissions_dialog.rb` or `lib/extensions_dialog.rb`
+  exist, so there is no caller for it yet — this is the same gap as the
+  Permissions/Extensions rows above, not a separate problem.
+- **glycin** (image loading) and **libshumate** (maps): `git grep -i
+  "shumate\|glycin\|portal\|Xdp"` over every file in `origin/main`, and a
+  per-blob grep for `Gdk.Texture`/`gdk-pixbuf`/`Shumate`/`glycin` across every
+  `.js` file, turns up nothing for either gem anywhere upstream. The one
+  `Gdk.Texture` hit (`src/Previewer/Previewer.js:466`,
+  `Gdk.Texture.new_from_file(file)` for the screenshot clipboard) is plain
+  GDK, not glycin. Workbench is a code-sample/previewer tool with no maps
+  feature and no image-loading path beyond that one `Gdk.Texture` call —
+  upstream does not appear to use either gem's functionality at all. Whoever
+  wired these two into the gemspec in `20c4b60` should state the actual
+  upstream call site each is meant to port, or say plainly that none was
+  found, rather than leaving the dependency sitting unexplained.
 
 ## Blockers
 
