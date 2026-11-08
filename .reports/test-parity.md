@@ -3,18 +3,18 @@
 | | |
 |---|---|
 | Upstream | `main` @ `1c5627b` |
-| Port | `ruby` @ `146e3ae` |
+| Port | `ruby` @ `4948c35` |
 | Upstream tests | 12 (named `test(...)` blocks across `test/*.test.js`) |
-| Ported | 0 |
-| Gaps | 12 |
-| Test command (port) | `nix develop --command xvfb-run -a ruby test/drive_workbench.rb` (and `test/drive_window.rb`) — these are drive scripts, not unit tests; `rspec` finds zero examples (`spec/` has only a harness `spec_helper.rb`), and `test/` has no `test_*.rb` unit-test files either |
+| Ported (RSpec/unit) | 0 |
+| Gaps | 11 owed (1 upstream-skipped, carried as a note, not owed) |
+| Test command (unit) | `ruby -e 'require "rspec/core"; exit RSpec::Core::Runner.run(["--format","progress","--require","spec_helper","spec"])'` — **run fresh this round: `0 examples, 0 failures`** |
+| Test command (E2E) | `nix develop --command xvfb-run -a ruby test/drive_workbench.rb` (and `test/drive_window.rb`) — drive scripts, not unit tests |
 
 ## Upstream census
 
 Upstream's test runner is a custom harness (`troll/tst/tst.js`, from the
 `troll` submodule), invoked as `test("name", () => { ...assert.fixture(...) })`.
-Treating each named `test(...)` call as the assertion unit (matching the
-`it(...)` convention this skill names for Jasmine-style suites):
+Treating each named `test(...)` call as the assertion unit:
 
 | # | File | Test | Purpose | Port test | State |
 |---|---|---|---|---|---|
@@ -28,85 +28,102 @@ Treating each named `test(...)` call as the assertion unit (matching the
 | 8 | `test/isDiagnosticInRange.test.js:81` | `not in range` | negative case | — | **gap** |
 | 9 | `test/xml.test.js:10` | `format` | XML/blueprint-XML pretty-printer, 4 fixture cases | — | **gap** |
 | 10 | `test/xml.test.js:107` | `invalid documents` | formatter raises on 6 malformed inputs | — | **gap** |
-| 11 | `test/xml.test.js:133` | `library examples` (upstream `test.skip`) | round-trips every Library demo's XML through the formatter | n/a — upstream itself skips this one | **gap** (upstream-skipped; not counted toward the owed total but listed for completeness) |
+| 11 | `test/xml.test.js:133` | `library examples` (upstream `test.skip`) | round-trips every Library demo's XML through the formatter | n/a — upstream itself skips this one | note, not owed |
 | 12 | `test/previewer.test.js:11` | `getObjectClass` | resolves a GObject class name from a tag/namespace pair | — | **gap** |
 
-Owed count (excluding the one upstream already skips): **11 of 12**, plus the
-skipped one carried forward as a note. Call it 11/11 gaps against the live
-upstream suite.
+Owed count: **11 of 12** (excluding the upstream-skipped one).
 
 ## Why these are real gaps, not "doesn't apply to Ruby"
 
-Three of the four source modules under test are things the port actually
-ported, under different names:
+Four of the source modules under test map onto things the port actually
+built, under different names, none of which carries the upstream unit test
+with it:
 
-- `isDeviceInputOverrideAvailable` (Flatpak version gate) → `lib/flatpak.rb`
-  almost certainly reimplements this comparison (it is the flatpak helper the
-  port ported in `2398e1f`). No Ruby test exercises the equal/above/below
-  boundary the upstream test pins.
-- `xml.js`'s `format` → `lib/xml.rb` (confirmed ported, has its own header
-  comment). The formatter is live in the port (the UI panel's XML path uses
-  it) and has zero unit tests of its own; its only exercise is indirectly,
-  through `test/drive_workbench.rb`'s single XML-editing check (line 246-254),
-  which asserts the buffer round-trips one string — not the 4 format fixtures
-  or 6 invalid-document cases upstream pins.
+- `isDeviceInputOverrideAvailable` (Flatpak version gate) → `lib/flatpak.rb`.
+  No Ruby test exercises the equal/above/below version-string boundary.
+- `xml.js`'s `format` → `lib/xml.rb` (confirmed ported, own header comment,
+  live in the UI panel's XML path). Its only exercise is one indirect check
+  in `test/drive_workbench.rb` (the buffer round-trips one edited string) —
+  not the 4 format fixtures or 6 invalid-document cases upstream pins.
 - `isDiagnosticInRange` → almost certainly reimplemented inside
-  `lib/lsp.rb`/`lib/lsp_sourceview.rb` to decide whether a diagnostic applies
-  to the cursor's position. Zero Ruby tests of the boundary logic.
+  `lib/lsp.rb`/`lib/lsp_sourceview.rb`. Zero Ruby tests of the boundary.
 - `getObjectClass` (previewer) → `lib/previewer.rb`/`lib/internal_previewer.rb`.
-  Zero Ruby tests.
+  Zero Ruby tests — and this is the function the drive suite's own Shumate
+  check (`test/drive_workbench.rb:280-283`) exercises at the integration
+  level for exactly one class name, which is not a substitute for the
+  upstream unit test's edge cases.
 
-None of these is "C-specific plumbing" or GObject-interface machinery that
-Ruby's GC makes moot — they are small, pure, easily-portable functions with
-documented edge cases upstream found worth pinning (an off-by-one on a
-Flatpak version string, a diagnostic that starts on the line after the one
-being checked). They are exactly the kind of test that is cheapest to port
-and most valuable to keep, and none of the 12 exist in Ruby.
+None of these is GObject-interface plumbing Ruby's GC makes moot — they are
+small, pure, portable functions with documented edge cases upstream found
+worth pinning. They are the cheapest tests to port and none of the 12 exist
+in Ruby.
 
-## The port's own test suite
+## RSpec / Minitest harness — run fresh this round
 
-`test/drive_workbench.rb` (32 `check(...)` calls) and `test/drive_window.rb`
-(a GTK-driving helper, 0 assertions of its own — it is infrastructure, matched
-by the `*driver*`/`*helper*` exclusion in `test-census.sh` and correctly not
-counted) are end-to-end smoke checks of the live app, driven through
-`test/gtk_driver.rb`. They are useful and they are **not substitutes for**
-the 12 upstream unit tests above: an E2E check that "the buffer round-trips an
-edit" cannot also stand in for "the formatter raises on 6 specific malformed
-XML documents", because the E2E check never feeds any of those 6 documents in.
+`spec/` contains `spec_helper.rb` and `README.md` only — **no `*_spec.rb`
+files anywhere in the tree.** Ran it directly in the dev shell this round:
 
-Three of the 32 checks are vacuous and do not actually test what their name
-claims (see `component-parity.md` and `accountability-ensurance.md` for the
-detail): `about dialog built without raising`, `shortcuts dialog built
-without raising`, `permissions dialog built without raising` are all
-`{ true }` — these pass regardless of whether the dialog shows anything
-correct. Counting them toward "32 checks passed" overstates how much of the
-app the runtime gate actually verifies. Treat the effective driven-check
-count as 29, not 32, until those three are replaced with a real assertion
-(e.g. that the dialog's title/heading widget holds the expected text).
+```
+$ nix develop --command xvfb-run -a ruby -e 'require "rspec/core"; \
+    exit RSpec::Core::Runner.run(["--format","progress","--require","spec_helper","spec"])'
+NOTE: kettle-test isn't installed; running with plain RSpec.
+No examples found.
+Finished in 0.00199 seconds
+0 examples, 0 failures
+```
 
-The runtime gate's "21 components" also undercounts against
-`component-identification.md`'s 31-unit list: Library, Extensions, the hover
-provider, the out-of-process previewer, and the CLI are driven by zero
-checks, because they do not exist to drive. A component no check exercises
-is unverified, not done — stated here per the task's framing, and it also
-means the 21/21 claim is a claim about a smaller app than upstream actually
-is.
+`0 examples, 0 failures` is a **suite that has never asserted anything and
+reads as green.** This is precisely the "a suite that has never been
+executed is a gap" case — except here it has been executed, in this round,
+and confirmed empty, so it is not a hypothetical: there is no unit-level
+Ruby test coverage of this port at all, full stop.
 
-## RSpec / Minitest harness
+## The port's own test suite — run fresh this round, and found flaky
 
-`spec/spec_helper.rb` loads `kettle/test/rspec` but `spec/` contains no
-`*_spec.rb` files — `bundle exec rspec` (or the project's own `rake` test task)
-would report **0 examples, 0 failures**, which is a suite that has never
-actually asserted anything and would read as green. This is the exact
-"a suite that has never been executed is a gap" case the task calls out
-explicitly: there is no spec suite here to execute, full stop — the
-scaffolding is present and empty.
+`test/drive_workbench.rb` has 45 `d.check(...)` calls (matches the runtime
+gate's claimed "45 checks"); `test/drive_window.rb` has 0 (it's a smaller,
+separate drive script exercising the window/panel-switching path, also with
+its own `d.check(...)` calls counted separately — see its own output, not
+part of the 45). Both are end-to-end smoke checks of the live app, driven
+through `test/gtk_driver.rb`, not unit tests.
+
+Ran `test/drive_workbench.rb` **four times** in the dev shell this round:
+
+| Run | Result |
+|---|---|
+| 1 | `45 of 45 checks passed` then **`errored step: watchdog timeout` → `DRIVE FAILED (1)`** |
+| 2 | `45 of 45 checks passed` → `DRIVE OK` |
+| 3 | `45 of 45 checks passed` → `DRIVE OK` |
+| 4 | `45 of 45 checks passed` → `DRIVE OK` |
+
+**The suite is flaky: 1 of 4 runs failed**, after all 45 checks had already
+reported passing, on a watchdog timeout hanging off the final step (closing
+an edited session's confirmation dialog). This matters for exactly the
+reason the task's runtime-gate framing calls out: a gate that is
+intermittently red is not the same claim as a gate that is reliably green,
+and "45 checks passed, 0 failed" taken from a single run overstates the
+suite's actual reliability. This is a genuine, reproducible-on-this-machine
+finding, not a one-off fluke from an unrelated host hiccup — it reproduced
+with the identical final step hanging the process until the watchdog fired.
+
+Three of the 45 checks are vacuous and do not test what their name claims
+(see `component-parity.md` and `accountability-ensurance.md`): `about
+dialog built without raising`, `shortcuts dialog built without raising`,
+`permissions dialog built without raising` are each literally
+`{ true }` — they pass regardless of what the dialog shows. Treat the
+effective, meaningful driven-check count as 42, not 45.
+
+The runtime gate's "30 components" also does not reach: Library's demo
+content (no corpus ships — see `component-identification.md`), the
+out-of-process previewer, the hover provider, the C preview-window widget,
+and the CLI are driven by zero checks, because the first has no real data
+and the rest do not exist to drive. A component no check exercises is
+unverified, not done.
 
 ## Verdict
 
-**0/12 upstream tests ported.** The runtime drive gate (32 checks, trimmed to
-29 real ones) is a separate, smaller, E2E safety net that does not substitute
-for unit coverage of the ported pure-function logic, and three of
-`component-identification.md`'s biggest gaps (Library, Extensions, the
-out-of-process previewer) have no test coverage of any kind because they have
-no implementation of any kind.
+**0/12 upstream unit tests ported.** The runtime drive gate (45 checks,
+effectively 42 meaningful ones) is a separate, E2E safety net that does not
+substitute for unit coverage of the ported pure-function logic, is flaky on
+this machine (1 failure in 4 runs, after-the-fact watchdog timeout), and
+does not exercise the units that remain unported or undata'd.
