@@ -16,8 +16,11 @@ require_relative 'language'
 # Upstream also scaffolds the chosen language's project on switch — a
 # jsconfig.json for JavaScript, a Cargo.toml for Rust, a tsconfig.json for
 # TypeScript — from src/langs/javascript/javascript.js and its siblings. Those
-# modules are not ported, so switching language here switches the editor and
-# resets the previewer, and writes no project files.
+# modules are unported, so switching language here switches the editor and
+# resets the previewer but writes no project files: a session's directory
+# never gets the per-language scaffolding a real language server or compiler
+# would need to resolve imports or build the project, on top of Window#run
+# never invoking a compiler at all.
 class PanelCode
   def initialize(settings:, app_settings:, button:, previewer:, code_views:, typescript: false)
     @settings = settings

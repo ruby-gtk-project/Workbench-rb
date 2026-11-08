@@ -21,15 +21,18 @@ require_relative 'internal_previewer'
 #
 # Upstream can run that last step out of process, in a Vala, Rust or Python
 # previewer, which is how it previews code written in those languages.
-# lib/external_previewer.rb and lib/dbus_previewer.rb are not ported yet, so
-# the only previewer here is the internal one, and `use_internal` is the whole
-# of upstream's previewer switching.
+# lib/external_previewer.rb and lib/dbus_previewer.rb are unported, so this
+# port has no out-of-process previewer at all: a demo whose preview widget is
+# defined in Vala, Rust or Python source (rather than the UI panel's XML)
+# cannot be previewed here, and `use_internal` is left with nothing to switch
+# to or from.
 #
 # Upstream's safe mode runs each candidate definition through a throwaway
 # `workbench-crasher` process first, so a definition that segfaults GTK takes
-# the helper down instead of Workbench. That helper is src/Previewer/crasher.vala
-# and is not ported, so the session's `safe-mode` key is stored and shown but
-# does not yet pre-check a definition.
+# the helper down instead of Workbench. That helper (src/Previewer/crasher.vala)
+# is unported, so the session's `safe-mode` toggle is stored and shown in the
+# UI but changes nothing: a crashing preview definition takes this whole
+# process down with it, exactly as if safe mode were always off.
 #
 # Upstream's previewer.vala registers GObject types up front (`ensure_types`)
 # so a demo's `<object class="ShumateSimpleMap">` resolves through

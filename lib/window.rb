@@ -40,10 +40,13 @@ require_relative 'extensions_dialog'
 # only forgotten, an untouched session is deleted, and an edited one asks
 # whether to keep it.
 #
-# One thing upstream does here is missing because the components it belongs
-# to are not ported: the per-language builders and compilers
-# (src/langs/*/Builder.js and Compiler.js), so Run formats the documents and
-# redraws the preview but does not execute the code.
+# Run does not run anything. Upstream's per-language builders and compilers
+# (src/langs/*/Builder.js and Compiler.js) are not ported, so clicking Run (or
+# Ctrl+Return) only clears the console, formats the visible documents and
+# redraws the preview — for every one of the six languages, no Rust, Vala,
+# Python, JavaScript, TypeScript or Blueprint code a user writes here is ever
+# compiled or executed, which is the core verb a code-playground app exists
+# to provide.
 class Window
   ACTIONS = {
     'run'    => ['<Control>Return'],

@@ -54,6 +54,19 @@ def find_named(root, name, seen = {})
   end
 end
 
+def find_descendant_of_class(root, klass, seen = {})
+  if root.nil? || seen[root.object_id]
+    nil
+  else
+    seen[root.object_id] = true
+    if root.is_a?(klass)
+      root
+    else
+      widget_children(root).lazy.filter_map { |child| find_descendant_of_class(child, klass, seen) }.first
+    end
+  end
+end
+
 def widget_children(root)
   Enumerator.new do |yielder|
     if root.respond_to?(:first_child)
@@ -179,7 +192,13 @@ Dir.mktmpdir('workbench-drive') do |home|
     d.step('open the About dialog') { app_builder.app.activate_action('about', nil) }
 
     d.step('About dialog is presented') do
-      d.check('about dialog built without raising') { true }
+      about = find_descendant_of_class(app_builder.app.active_window, Adwaita::AboutDialog)
+      d.check('an Adwaita::AboutDialog is in the window tree') { !about.nil? }
+      d.check('about dialog names the application') { about&.application_name == 'Workbench' }
+      d.check('about dialog reports the real gem version') { about&.version == Workbench::Rb::VERSION }
+      d.check('about dialog debug info reports the real GTK version') do
+        about&.debug_info.to_s.include?(Gtk::Version::STRING)
+      end
       d.shot('about')
     end
 
@@ -190,7 +209,10 @@ Dir.mktmpdir('workbench-drive') do |home|
     d.step('open the Keyboard Shortcuts dialog') { app_builder.app.activate_action('shortcuts', nil) }
 
     d.step('Keyboard Shortcuts dialog is presented') do
-      d.check('shortcuts dialog built without raising') { true }
+      dialog = app_builder.actions.shortcuts_window.send(:dialog)
+      found = find_descendant_of_class(app_builder.app.active_window, Adwaita::ShortcutsDialog)
+      d.check('the presented dialog is the real ShortcutsDialog instance') { found&.equal?(dialog) }
+      d.check('shortcuts dialog is titled Keyboard Shortcuts') { dialog.title == 'Keyboard Shortcuts' }
       d.shot('shortcuts')
     end
 
@@ -374,7 +396,12 @@ Dir.mktmpdir('workbench-drive') do |home|
     d.step('open the Permissions dialog') { app_builder.app.active_window.activate_action('permissions', nil) }
 
     d.step('Permissions dialog is presented') do
-      d.check('permissions dialog built without raising') { true }
+      permissions_dialog = window_ivar_from_window(app_builder.app.active_window).send(:permissions_dialog)
+      d.check('the real PermissionsDialog is visible') { permissions_dialog.send(:dialog).visible? }
+      d.check('heading reads Permissions Needed') { permissions_dialog.send(:heading_label).label == 'Permissions Needed' }
+      d.check('command row renders the real override command') do
+        permissions_dialog.send(:label_command).label.include?('flatpak override --user --share=network')
+      end
       d.shot('permissions')
     end
 
@@ -407,11 +434,26 @@ Dir.mktmpdir('workbench-drive') do |home|
 
     # --- app.library (Library of Demos and Examples) -------------------------
     #
-    # No demo corpus ships with the gem (see lib/library_window.rb), so this
-    # points LibraryWindow at a fixture corpus with one real demo directory,
-    # then drives the whole path upstream's Library.js/EntryRow.js cover:
-    # search filtering, and clicking a demo through to a real Session copied
-    # onto disk and a new window opened on it.
+    # First against the REAL corpus `data/demos` ships with (vendored by
+    # build-aux/vendor_demos.rb from workbenchdev/demos.git — see
+    # lib/library_window.rb), so a green run here means an actual user who
+    # never monkey-patches `demos_dir` sees real demos, not just the fixture
+    # corpus the later steps stock. Then this points LibraryWindow at a
+    # fixture corpus with one real demo directory, and drives the whole path
+    # upstream's Library.js/EntryRow.js cover: search filtering, and clicking
+    # a demo through to a real Session copied onto disk and a new window
+    # opened on it.
+
+    d.step('the real data/demos corpus is vendored and non-empty') do
+      real_demos = LibraryWindow.demos
+      d.check('real demos_dir exists on disk') { Dir.exist?(LibraryWindow.demos_dir) }
+      d.check('the real corpus parsed at least 100 demos') { real_demos.size >= 100 }
+      welcome = real_demos.find { |demo| demo['name'] == 'Welcome' }
+      d.check('the real corpus includes the Welcome demo') { !welcome.nil? }
+      d.check('the Welcome demo has a copied main.js on disk') do
+        File.exist?(File.join(LibraryWindow.demos_dir, 'Welcome', 'main.js'))
+      end
+    end
 
     d.step('stock a fixture demo corpus for the Library window') do
       fixture_dir = Dir.mktmpdir('workbench-library-fixture')

@@ -12,12 +12,15 @@ require_relative 'entry_row'
 # upstream's src/Library/Library.js and src/Library/Library.blp.
 #
 # Upstream reads its corpus out of `pkg.pkgdatadir/demos/index.json`, a tree
-# Meson installs from the separate `demos/` source directory at build time.
-# This gem has no install step that stages that tree, so `demos_dir` points
-# at `data/demos` next to the gemspec's own packaged `data/**/*` files —
-# the same slot a future round can drop a corpus into — and an absent or
-# unparsable index is read as "no demos" rather than an error, exactly as an
-# empty search result renders here.
+# Meson installs from the separate `demos/` source directory (an un-vendored
+# git submodule pointing at workbenchdev/demos.git) at build time. This gem
+# has no Meson install step, so `build-aux/vendor_demos.rb` — a Ruby port of
+# upstream's own `build-aux/library.js` — does that job ahead of time against
+# a checkout of that submodule, and its output is committed at `data/demos`,
+# next to the gemspec's own packaged `data/**/*` files. `demos_dir` points
+# there. An absent or unparsable index is still read as "no demos" rather
+# than an error, exactly as an empty search result renders here, which only
+# matters now for a checkout that deleted `data/demos` by hand.
 #
 # Opening a demo hands off to Window the same way upstream's openDemo does:
 # copy the demo into a fresh session, record which panel/language it asks
@@ -48,7 +51,7 @@ class LibraryWindow
     ['vala', 'Vala'],
   ].freeze
 
-  def self.demos_dir = File.expand_path('../../data/demos', __dir__)
+  def self.demos_dir = File.expand_path('../data/demos', __dir__)
 
   def self.demos
     @demos ||= begin
