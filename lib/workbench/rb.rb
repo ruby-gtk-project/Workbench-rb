@@ -1,6 +1,6 @@
-# frozen_string_literal: true
-
 require_relative "rb/version"
+
+# frozen_string_literal: true
 
 # The part of Workbench that loads without a display: just the gem's version
 # constant. Unlike tally-rb, this port has no separate display-free half —
